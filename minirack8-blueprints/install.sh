@@ -34,8 +34,6 @@ show_banner() {
 ║   MiniRack8 Enterprise Provisioner                          ║
 ║   Provision Docker, K3s, and Proxmox Resources              ║
 ║                                                              ║
-║   Hardware: Intel i5-13500T | 16GB RAM | 256GB SSD         ║
-║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
 }
