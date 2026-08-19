@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniRackHQ - MiniRack 8</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #0a0a0a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .banner {
+    width: 100%;
+    max-width: 1200px;
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    position: relative;
+  }
+
+  .banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #58a6ff, #1f6feb, #58a6ff);
+  }
+
+  .header {
+    padding: 40px 50px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #21262d;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #1f6feb, #58a6ff);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 4px 15px rgba(31, 111, 235, 0.4);
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo-main {
+    font-size: 24px;
+    font-weight: 700;
+    color: #f0f6fc;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-sub {
+    font-size: 12px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .badge {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    color: white;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(35, 134, 54, 0.3);
+  }
+
+  .content {
+    padding: 40px 50px;
+  }
+
+  .product-name {
+    font-size: 48px;
+    font-weight: 800;
+    color: #f0f6fc;
+    margin-bottom: 10px;
+    letter-spacing: -1px;
+  }
+
+  .product-tagline {
+    font-size: 18px;
+    color: #8b949e;
+    margin-bottom: 30px;
+    font-weight: 400;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+
+  .feature-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 25px;
+    transition: all 0.3s ease;
+  }
+
+  .feature-card:hover {
+    border-color: #58a6ff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(88, 166, 255, 0.1);
+  }
+
+  .feature-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+  }
+
+  .feature-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f0f6fc;
+    margin-bottom: 8px;
+  }
+
+  .feature-desc {
+    font-size: 13px;
+    color: #8b949e;
+    line-height: 1.5;
+  }
+
+  .specs-section {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+  }
+
+  .specs-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #58a6ff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 15px;
+  }
+
+  .specs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+  }
+
+  .spec-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .spec-label {
+    font-size: 13px;
+    color: #8b949e;
+  }
+
+  .spec-value {
+    font-size: 14px;
+    color: #f0f6fc;
+    font-weight: 600;
+  }
+
+  .price-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #1f6feb20, #58a6ff10);
+    border: 1px solid #1f6feb40;
+    border-radius: 12px;
+    padding: 25px;
+  }
+
+  .price-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .price-label {
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 5px;
+  }
+
+  .price-value {
+    font-size: 36px;
+    font-weight: 800;
+    color: #f0f6fc;
+  }
+
+  .price-installments {
+    font-size: 14px;
+    color: #58a6ff;
+    margin-top: 5px;
+  }
+
+  .cta-button {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    color: white;
+    border: none;
+    padding: 16px 40px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(35, 134, 54, 0.3);
+  }
+
+  .cta-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(35, 134, 54, 0.4);
+  }
+
+  .footer {
+    padding: 20px 50px;
+    border-top: 1px solid #21262d;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .stock-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #d29922;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .stock-dot {
+    width: 8px;
+    height: 8px;
+    background: #d29922;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 20px;
+  }
+
+  .footer-link {
+    color: #8b949e;
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.3s ease;
+  }
+
+  .footer-link:hover {
+    color: #58a6ff;
+  }
+
+  @media (max-width: 768px) {
+    .header {
+      padding: 30px 25px 20px;
+      flex-direction: column;
+      gap: 15px;
+      align-items: flex-start;
+    }
+
+    .content {
+      padding: 30px 25px;
+    }
+
+    .product-name {
+      font-size: 32px;
+    }
+
+    .price-section {
+      flex-direction: column;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .footer {
+      padding: 15px 25px;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-start;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">MR</div>
+        <div class="logo-text">
+          <div class="logo-main">MiniRackHQ</div>
+          <div class="logo-sub">Compact Server Solutions</div>
+        </div>
+      </div>
+      <div class="badge">MiniLab 8 Ready</div>
+    </div>
+
+    <div class="content">
+      <h1 class="product-name">MiniRack 8</h1>
+      <p class="product-tagline">Compact 10-inch server rack for homelabs, learning environments, and portable business deployments</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🖥️</div>
+          <div class="feature-title">8U Compact Design</div>
+          <div class="feature-desc">16 3/8" × 11 1/8" × 7 7/8" with 8Us of component space and 3U expansion room</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <div class="feature-title">Intel 13th Gen Power</div>
+          <div class="feature-desc">i5-13500T processor, 4.6GHz, 14 cores with Windows 11 Pro and 16GB DDR4 RAM</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔌</div>
+          <div class="feature-title">Full Networking Kit</div>
+          <div class="feature-desc">12-port patch panel, network switch, 10x Cat6 cables, 8-outlet PDU included</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📱</div>
+          <div class="feature-title">LCD Touchscreen</div>
+          <div class="feature-desc">Built-in LCD display with brush cable manager for clean, professional cable management</div>
+        </div>
+      </div>
+
+      <div class="specs-section">
+        <div class="specs-title">Technical Specifications</div>
+        <div class="specs-grid">
+          <div class="spec-item">
+            <span class="spec-label">CPU:</span>
+            <span class="spec-value">Intel i5-13500T</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Speed:</span>
+            <span class="spec-value">4.6GHz</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Cores:</span>
+            <span class="spec-value">14</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">RAM:</span>
+            <span class="spec-value">16GB DDR4</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Storage:</span>
+            <span class="spec-value">256GB SSD</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">OS:</span>
+            <span class="spec-value">Windows 11 Pro</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="price-section">
+        <div class="price-info">
+          <div class="price-label">Starting at</div>
+          <div class="price-value">$1,500.00</div>
+          <div class="price-installments">From $135.39/mo</div>
+        </div>
+        <button class="cta-button">Add to Cart</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="stock-status">
+        <div class="stock-dot"></div>
+        <span>Only 4 left in stock</span>
+      </div>
+      <div class="footer-links">
+        <a href="#" class="footer-link">MiniLab 8</a>
+        <a href="#" class="footer-link">Specs</a>
+        <a href="#" class="footer-link">Support</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
