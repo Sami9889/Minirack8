@@ -20,7 +20,8 @@ Permanent, production-ready blueprints for the MiniRack8.
 ```bash
 # Install Docker and deploy a profile in one step
 # PCI-DSS inspired security: cryptographically secure passwords generated automatically
-curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
+# Use --skip-os-check to bypass OS validation on non-standard Linux distributions
+curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab --skip-os-check
 ```
 
 ### Manual Installation

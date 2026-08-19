@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# MiniRack8 All-in-One Installer
-# One command to install Docker and deploy a profile
+# MiniRack8 Enterprise Provisioner
+# Provision Docker, K3s, and Proxmox resources for MiniRack8
 # =============================================================================
 
 set -euo pipefail
@@ -31,8 +31,8 @@ show_banner() {
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║   MiniRack8 All-in-One Installer                            ║
-║   Install Docker + Deploy Blueprints in One Command         ║
+║   MiniRack8 Enterprise Provisioner                          ║
+║   Provision Docker, K3s, and Proxmox Resources              ║
 ║                                                              ║
 ║   Hardware: Intel i5-13500T | 16GB RAM | 256GB SSD         ║
 ║                                                              ║
@@ -53,6 +53,11 @@ check_root() {
 check_os() {
   step "Checking operating system..."
 
+  if [[ "${SKIP_OS_CHECK}" == true ]]; then
+    warn "Skipping OS check per --skip-os-check flag."
+    return 0
+  fi
+
   if [[ -f /etc/os-release ]]; then
     # shellcheck source=/dev/null
     . /etc/os-release
@@ -68,7 +73,7 @@ check_os() {
       info "OS supported: ${OS} ${VER}"
       ;;
     *)
-      fail "Unsupported OS: ${OS}. This script supports Ubuntu and Debian only."
+      fail "Unsupported OS: ${OS}. This script supports Ubuntu and Debian only. Use --skip-os-check to bypass."
       ;;
   esac
 }
@@ -580,7 +585,7 @@ show_summary() {
 
 show_usage() {
   cat << EOF
-${GREEN}MiniRack8 All-in-One Installer${NC}
+${GREEN}MiniRack8 Enterprise Provisioner${NC}
 
 ${YELLOW}Usage:${NC} $0 --profile <profile> [options]
 
@@ -599,6 +604,7 @@ ${YELLOW}Options:${NC}
   --profile     Profile to deploy (required)
   --server-ip   K3s server IP (for k3s-agent)
   --skip-docker Skip Docker installation
+  --skip-os-check Bypass OS compatibility check
   --help        Show this help
 
 ${YELLOW}Examples:${NC}
@@ -606,6 +612,7 @@ ${YELLOW}Examples:${NC}
   $0 --profile full
   $0 --profile k3s-server
   $0 --profile k3s-agent --server-ip 192.168.1.10
+  $0 --profile homelab --skip-os-check
 EOF
   exit 0
 }
@@ -616,6 +623,7 @@ main() {
   PROFILE=""
   SERVER_IP=""
   SKIP_DOCKER=false
+  SKIP_OS_CHECK=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -629,6 +637,10 @@ main() {
         ;;
       --skip-docker)
         SKIP_DOCKER=true
+        shift
+        ;;
+      --skip-os-check)
+        SKIP_OS_CHECK=true
         shift
         ;;
       --help|-h)
