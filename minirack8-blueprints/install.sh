@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# MiniRack8 All-in-One Installer
-# One command to install Docker and deploy a profile
+# MiniRack8 Enterprise Provisioner
+# Provision Docker, K3s, and Proxmox resources for MiniRack8
 # =============================================================================
 
 set -euo pipefail
@@ -31,8 +31,8 @@ show_banner() {
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║   MiniRack8 All-in-One Installer                            ║
-║   Install Docker + Deploy Blueprints in One Command         ║
+║   MiniRack8 Enterprise Provisioner                          ║
+║   Provision Docker, K3s, and Proxmox Resources              ║
 ║                                                              ║
 ║   Hardware: Intel i5-13500T | 16GB RAM | 256GB SSD         ║
 ║                                                              ║
@@ -53,6 +53,11 @@ check_root() {
 check_os() {
   step "Checking operating system..."
 
+  if [[ "${SKIP_OS_CHECK}" == true ]]; then
+    warn "Skipping OS compatibility check per --skip-os-check flag."
+    return 0
+  fi
+
   if [[ -f /etc/os-release ]]; then
     # shellcheck source=/dev/null
     . /etc/os-release
@@ -68,7 +73,10 @@ check_os() {
       info "OS supported: ${OS} ${VER}"
       ;;
     *)
-      fail "Unsupported OS: ${OS}. This script supports Ubuntu and Debian only."
+      fail "Unsupported OS: ${OS}. This script supports Ubuntu and Debian only.
+
+To bypass this check and continue anyway, re-run with:
+  sudo bash install.sh --profile ${PROFILE} --skip-os-check"
       ;;
   esac
 }
@@ -76,35 +84,56 @@ check_os() {
 check_hardware() {
   step "Checking hardware compatibility..."
 
-  local total_ram_gb
-  total_ram_gb=$(grep MemTotal /proc/meminfo | awk '{print $2 / 1024 / 1024}')
-  info "Total RAM: ${total_ram_gb}GB"
+  # RAM check
+  local total_ram_kb total_ram_gb
+  total_ram_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+  total_ram_gb=$(awk "BEGIN {printf \"%.1f\", ${total_ram_kb}/1024/1024}")
+  info "RAM: ${total_ram_gb}GB"
 
-  if [[ ${total_ram_gb} -lt 8 ]]; then
+  if (( $(awk "BEGIN {print (${total_ram_gb} < 8)}") )); then
     warn "This system has less than 8GB RAM. MiniRack8 has 16GB."
   else
     info "RAM meets minimum requirements (8GB)."
   fi
 
-  local cpu_cores
+  # CPU check
+  local cpu_cores cpu_model
   cpu_cores=$(nproc)
-  info "CPU cores: ${cpu_cores}"
+  cpu_model=$(grep 'model name' /proc/cpuinfo | head -1 | sed 's/.*: //')
+  info "CPU: ${cpu_model}"
+  info "Cores: ${cpu_cores}"
 
-  if [[ ${cpu_cores} -lt 4 ]]; then
-    warn "This system has fewer than 4 cores. MiniRack8 has 14 cores."
+  if (( cpu_cores < 4 )); then
+    warn "This system has fewer than 4 cores. MiniRack8 has 14 cores (i5-13500T)."
   else
     info "CPU cores meet minimum requirements (4 cores)."
   fi
 
+  # Storage check
   local storage_gb
   storage_gb=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
-  info "Available storage: ${storage_gb}GB"
+  info "Storage: ${storage_gb}GB available"
 
   if [[ ${storage_gb} -lt 20 ]]; then
     fail "Insufficient storage. At least 20GB required."
   else
     info "Storage meets minimum requirements."
   fi
+
+  # Network check
+  local primary_ip
+  primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "N/A")
+  info "Primary IP: ${primary_ip}"
+
+  # Summary
+  echo ""
+  info "Hardware Summary:"
+  echo "  CPU:    ${cpu_model}"
+  echo "  Cores:  ${cpu_cores}"
+  echo "  RAM:    ${total_ram_gb}GB"
+  echo "  Disk:   ${storage_gb}GB"
+  echo "  IP:     ${primary_ip}"
+  echo ""
 }
 
 validate_profile() {
@@ -580,7 +609,7 @@ show_summary() {
 
 show_usage() {
   cat << EOF
-${GREEN}MiniRack8 All-in-One Installer${NC}
+${GREEN}MiniRack8 Enterprise Provisioner${NC}
 
 ${YELLOW}Usage:${NC} $0 --profile <profile> [options]
 
@@ -599,6 +628,8 @@ ${YELLOW}Options:${NC}
   --profile     Profile to deploy (required)
   --server-ip   K3s server IP (for k3s-agent)
   --skip-docker Skip Docker installation
+  --skip-os-check Bypass OS compatibility check
+  --force        Skip OS and Docker checks, deploy immediately
   --help        Show this help
 
 ${YELLOW}Examples:${NC}
@@ -606,16 +637,18 @@ ${YELLOW}Examples:${NC}
   $0 --profile full
   $0 --profile k3s-server
   $0 --profile k3s-agent --server-ip 192.168.1.10
+  $0 --profile homelab --skip-os-check
+  $0 --profile homelab --force
 EOF
   exit 0
 }
 
 main() {
-  show_banner
-
   PROFILE=""
   SERVER_IP=""
   SKIP_DOCKER=false
+  SKIP_OS_CHECK=false
+  FORCE_MODE=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -628,6 +661,16 @@ main() {
         shift 2
         ;;
       --skip-docker)
+        SKIP_DOCKER=true
+        shift
+        ;;
+      --skip-os-check)
+        SKIP_OS_CHECK=true
+        shift
+        ;;
+      --force)
+        FORCE_MODE=true
+        SKIP_OS_CHECK=true
         SKIP_DOCKER=true
         shift
         ;;
@@ -644,6 +687,7 @@ main() {
   validate_profile "${PROFILE}"
 
   check_root
+  show_banner
   check_os
   check_hardware
 
