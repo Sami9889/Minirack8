@@ -219,6 +219,155 @@ EOF
 }
 
 # =============================================================================
+# Secure Password Generation & Input
+# =============================================================================
+
+generate_password() {
+  local length="${1:-32}"
+  openssl rand -base64 "${length}" | tr -d '\n' | tr -d '/' | tr -d '+' | head -c "${length}"
+}
+
+prompt_secure_password() {
+  local var_name="${1:?variable name required}"
+  local description="${2:-${var_name}}"
+  local password=""
+  local password_confirm=""
+
+  echo ""
+  info "Set password for: ${description}"
+  echo "  Press Enter to auto-generate a secure password"
+  echo "  Or type a custom password (min 16 characters recommended)"
+  echo ""
+
+  read -rsp "Password [auto-generate]: " password
+  echo ""
+
+  # Auto-generate if empty
+  if [[ -z "${password}" ]]; then
+    password=$(generate_password 32)
+    info "Auto-generated password: ${password}"
+    echo ""
+  else
+    # Validate custom password
+    if [[ ${#password} -lt 12 ]]; then
+      warn "Password is less than 12 characters. Recommend at least 16."
+    fi
+
+    # Confirm password
+    read -rsp "Confirm password: " password_confirm
+    echo ""
+
+    if [[ "${password}" != "${password_confirm}" ]]; then
+      fail "Passwords do not match."
+    fi
+  fi
+
+  # Set variable in parent scope
+  printf -v "${var_name}" "%s" "${password}"
+}
+
+setup_secure_passwords() {
+  step "Configuring secure passwords..."
+
+  local pihole_password mysql_password mysql_root_password minio_password influxdb_password
+
+  info "Generating cryptographically secure passwords using /dev/urandom"
+  echo ""
+
+  prompt_secure_password "pihole_password" "Pi-hole Admin Password"
+  prompt_secure_password "mysql_password" "Nextcloud Database Password"
+  prompt_secure_password "mysql_root_password" "MariaDB Root Password"
+  prompt_secure_password "minio_password" "MinIO Root Password"
+  prompt_secure_password "influxdb_password" "InfluxDB Admin Password"
+
+  echo ""
+  info "Passwords configured. Writing to ${MINIRACK_INSTALL_DIR}/.env..."
+
+  # Generate WireGuard key pair
+  local wg_private_key wg_public_key
+  wg_private_key=$(wg genkey)
+  wg_public_key=$(echo "${wg_private_key}" | wg pubkey)
+
+  # Generate random Drone secrets if not provided
+  local drone_client_id="${DRONE_GITEA_CLIENT_ID:-$(generate_password 24)}"
+  local drone_client_secret="${DRONE_GITEA_CLIENT_SECRET:-$(generate_password 32)}"
+  local drone_rpc_secret="${DRONE_RPC_SECRET:-$(generate_password 32)}"
+
+  # Detect primary IP
+  local primary_ip
+  primary_ip=$(hostname -I | awk '{print $1}')
+  if [[ -z "${primary_ip}" ]]; then
+    primary_ip="192.168.1.10"
+    warn "Could not detect IP. Using default: ${primary_ip}"
+  fi
+
+  cat > "${MINIRACK_INSTALL_DIR}/.env" << EOF
+# MiniRack8 Environment Configuration
+# SECURITY: This file contains sensitive credentials
+# Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# =============================================================================
+# Pi-hole
+# =============================================================================
+PIHOLE_WEBPASSWORD=${pihole_password}
+PIHOLE_IP=${primary_ip}
+
+# =============================================================================
+# Nextcloud / MariaDB
+# =============================================================================
+MYSQL_PASSWORD=${mysql_password}
+MYSQL_ROOT_PASSWORD=${mysql_root_password}
+
+# =============================================================================
+# MinIO
+# =============================================================================
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=${minio_password}
+
+# =============================================================================
+# InfluxDB
+# =============================================================================
+INFLUXDB_PASSWORD=${influxdb_password}
+
+# =============================================================================
+# Drone CI
+# =============================================================================
+DRONE_GITEA_SERVER=http://gitea:3000
+DRONE_GITEA_CLIENT_ID=${drone_client_id}
+DRONE_GITEA_CLIENT_SECRET=${drone_client_secret}
+DRONE_RPC_SECRET=${drone_rpc_secret}
+DRONE_SERVER_HOST=drone.local
+DRONE_SERVER_PROTO=http
+
+# =============================================================================
+# WireGuard
+# =============================================================================
+WG_PRIVATE_KEY=${wg_private_key}
+WG_PUBLIC_KEY=${wg_public_key}
+WG_PEERS=3
+EOF
+
+  chmod 600 "${MINIRACK_INSTALL_DIR}/.env"
+
+  info "Environment file created: ${MINIRACK_INSTALL_DIR}/.env"
+  info "Permissions set to 600 (owner read/write only)."
+
+  echo ""
+  info "Password Summary:"
+  echo "  Pi-hole:        ${pihole_password}"
+  echo "  MySQL:          ${mysql_password}"
+  echo "  MySQL Root:     ${mysql_root_password}"
+  echo "  MinIO:          ${minio_password}"
+  echo "  InfluxDB:       ${influxdb_password}"
+  echo "  Drone Client:   ${drone_client_id}"
+  echo "  Drone Secret:   ${drone_client_secret}"
+  echo "  Drone RPC:      ${drone_rpc_secret}"
+  echo "  WireGuard PK:   ${wg_private_key}"
+  echo ""
+  warn "Save these passwords in a secure password manager!"
+}
+
+# =============================================================================
 # Blueprint Deployment
 # =============================================================================
 
@@ -246,38 +395,7 @@ setup_blueprints() {
 
   # Create .env if it doesn't exist
   if [[ ! -f "${MINIRACK_INSTALL_DIR}/.env" ]]; then
-    cat > "${MINIRACK_INSTALL_DIR}/.env" << 'EOF'
-# MiniRack8 Environment Configuration
-# Generated by installer - CHANGE THESE PASSWORDS
-
-# Pi-hole
-PIHOLE_WEBPASSWORD=changeme
-PIHOLE_IP=192.168.1.2
-
-# Nextcloud / MariaDB
-MYSQL_PASSWORD=changeme
-MYSQL_ROOT_PASSWORD=changeme
-
-# MinIO
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=changeme
-
-# InfluxDB
-INFLUXDB_PASSWORD=changeme
-
-# Drone CI
-DRONE_GITEA_SERVER=http://gitea:3000
-DRONE_GITEA_CLIENT_ID=
-DRONE_GITEA_CLIENT_SECRET=
-DRONE_RPC_SECRET=
-DRONE_SERVER_HOST=drone.local
-DRONE_SERVER_PROTO=http
-
-# WireGuard
-WG_PEERS=3
-EOF
-    warn "Environment file created at ${MINIRACK_INSTALL_DIR}/.env"
-    warn "IMPORTANT: Edit ${MINIRACK_INSTALL_DIR}/.env and set secure passwords!"
+    setup_secure_passwords
   fi
 
   info "Blueprints installed to ${MINIRACK_INSTALL_DIR}"
@@ -334,8 +452,8 @@ show_summary() {
   echo -e "${YELLOW}Profile Deployed:${NC} ${profile}"
 
   echo -e "\n${YELLOW}Next Steps:${NC}"
-  echo "1. Edit environment file: ${MINIRACK_INSTALL_DIR}/.env"
-  echo "   ${YELLOW}IMPORTANT:${NC} Set secure passwords before accessing services."
+  echo "1. Passwords saved to: ${MINIRACK_INSTALL_DIR}/.env (mode 600)"
+  echo "   Save these in a secure password manager!"
   echo ""
 
   case "${profile}" in
