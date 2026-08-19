@@ -6,6 +6,8 @@
 # =============================================================================
 
 set -euo pipefail
+set -o nounset
+set -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "${SCRIPT_DIR}")"
@@ -110,7 +112,7 @@ EOF
 # =============================================================================
 
 validate_profile() {
-  local profile="$1"
+  local profile="${1:?profile required}"
   local valid_profiles=(
     "homelab" "dev" "networking" "storage"
     "monitoring" "full"
@@ -125,7 +127,7 @@ validate_profile() {
 }
 
 validate_ip() {
-  local ip="$1"
+  local ip="${1:?IP address required}"
   local regex='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
   if [[ ! ${ip} =~ ${regex} ]]; then
     fail "Invalid IP address format: ${ip}"
@@ -140,7 +142,7 @@ validate_ip() {
 }
 
 validate_port() {
-  local port="$1"
+  local port="${1:?port required}"
   if ! [[ "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
     fail "Invalid port number: ${port}. Must be 1-65535."
   fi
@@ -153,6 +155,7 @@ validate_port() {
 check_os() {
   step "Checking operating system..."
   if [[ -f /etc/os-release ]]; then
+    # shellcheck source=/dev/null
     . /etc/os-release
     OS="${ID}"
     VER="${VERSION_ID}"
@@ -230,7 +233,7 @@ install_docker() {
       apt-get install -y -qq ca-certificates curl gnupg lsb-release
 
       install -m 0755 -d /etc/apt/keyrings
-      curl -fsSL https://download.docker.com/linux/${OS}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
       chmod a+r /etc/apt/keyrings/docker.gpg
 
       echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${OS} $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -266,7 +269,7 @@ check_docker_compose() {
 # =============================================================================
 
 deploy_docker() {
-  local profile="$1"
+  local profile="${1:?profile required}"
   step "Deploying Docker Compose profile: ${profile}"
 
   local compose_file="${REPO_DIR}/docker-compose/docker-compose.yml"
@@ -312,7 +315,7 @@ deploy_k3s_server() {
 }
 
 deploy_k3s_agent() {
-  local server_ip="$1"
+  local server_ip="${1:?server IP required}"
   [[ -z "${server_ip}" ]] && fail "--server-ip is required for k3s-agent profile."
 
   step "Deploying K3s agent connecting to ${server_ip}..."

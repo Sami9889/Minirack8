@@ -5,6 +5,8 @@
 # =============================================================================
 
 set -euo pipefail
+set -o nounset
+set -o errtrace
 
 # Configuration (override via environment variables)
 PROXMOX_NODE="${PROXMOX_NODE:-pve}"
@@ -24,20 +26,33 @@ fail() { echo -e "\033[0;31m[FAIL]\033[0m $*"; exit 1; }
 # =============================================================================
 
 validate_port() {
-  local port="$1"
+  local port="${1:?port required}"
   if ! [[ "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
     fail "Invalid port number: ${port}. Must be 1-65535."
   fi
 }
 
 validate_vmid() {
-  local vmid="$1"
+  local vmid="${1:?vmid required}"
   if ! [[ "${vmid}" =~ ^[0-9]+$ ]]; then
     fail "Invalid VMID: ${vmid}. Must be numeric."
   fi
   if (( vmid < 100 || vmid > 999999999 )); then
     fail "VMID out of range: ${vmid}. Must be 100-999999999."
   fi
+}
+
+validate_name() {
+  local name="${1:?name required}"
+  # Remove all non-alphanumeric, dash, underscore characters
+  name="${name//[^a-zA-Z0-9\-_]/}"
+  if [[ -z "${name}" ]]; then
+    fail "Invalid name after sanitization: ${name}."
+  fi
+  if [[ ${#name} -gt 100 ]]; then
+    fail "Name too long after sanitization: ${name}. Must be 100 characters or less."
+  fi
+  echo "${name}"
 }
 
 # =============================================================================
@@ -56,16 +71,14 @@ main() {
   [[ -z "${PM_API_TOKEN_SECRET:-}" ]] && fail "PM_API_TOKEN_SECRET is required."
 
   # Validate inputs
+  validate_vmid "${TEMPLATE_VMID}"
   validate_vmid "${NEW_VMID}"
-
-  # Sanitize VM name
-  NEW_NAME=$(echo "${NEW_NAME}" | tr -cd '[:alnum:]-_')
-  if [[ -z "${NEW_NAME}" ]]; then
-    fail "Invalid VM name: ${NEW_NAME}. Must contain only alphanumeric, dash, underscore."
-  fi
-
   validate_port "${MEMORY}"
   validate_port "${CORES}"
+
+  # Sanitize VM name
+  NEW_NAME=$(validate_name "${NEW_NAME}")
+  info "Sanitized VM name: ${NEW_NAME}"
 
   info "Cloning template ${TEMPLATE_VMID} to ${NEW_VMID}..."
   qm clone "${TEMPLATE_VMID}" "${NEW_VMID}" --name "${NEW_NAME}"

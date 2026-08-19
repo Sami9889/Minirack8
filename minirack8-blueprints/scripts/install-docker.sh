@@ -6,6 +6,8 @@
 # =============================================================================
 
 set -euo pipefail
+set -o nounset
+set -o errtrace
 
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 MINIRACK_COMPOSE_VERSION="v2.23.0"
@@ -53,6 +55,7 @@ check_os() {
   step "Checking operating system..."
 
   if [[ -f /etc/os-release ]]; then
+    # shellcheck source=/dev/null
     . /etc/os-release
     OS="${ID}"
     VER="${VERSION_ID}"
@@ -67,7 +70,7 @@ check_os() {
         warn "This script is tested on Ubuntu 22.04/24.04. You are running ${VER}."
         read -rp "Continue anyway? (y/N): " -n 1 -r
         echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        if [[ ! ${REPLY:-} =~ ^[Yy]$ ]]; then
           fail "Installation aborted."
         fi
       fi
@@ -130,7 +133,8 @@ uninstall_old_docker() {
   step "Removing old Docker versions..."
 
   # Remove old Docker packages
-  for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
+  local old_pkgs=(docker.io docker-doc docker-compose podman-docker containerd runc)
+  for pkg in "${old_pkgs[@]}"; do
     if dpkg -l | grep -q "^ii  ${pkg}"; then
       info "Removing ${pkg}..."
       apt-get remove -y -qq "${pkg}" 2>/dev/null || true
@@ -170,7 +174,7 @@ setup_docker_repo() {
   install -m 0755 -d /etc/apt/keyrings
 
   # Download Docker GPG key
-  curl -fsSL https://download.docker.com/linux/${OS}/gpg | \
+  curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | \
     gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
 
