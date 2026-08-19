@@ -1,0 +1,632 @@
+version: "3.9"
+
+# =============================================================================
+# MiniRack8 Blueprints - Enterprise Docker Compose
+# Hardware: Intel i5-13500T | 16GB RAM | 256GB SSD
+# =============================================================================
+
+networks:
+  # Frontend network - services exposed to users
+  minirack-frontend:
+    driver: bridge
+
+  # Backend network - internal services only
+  minirack-backend:
+    driver: bridge
+    internal: true
+
+  # Monitoring network - metrics collection
+  minirack-monitor:
+    driver: bridge
+
+volumes:
+  plex_config:
+  jellyfin_config:
+  transmission_config:
+  sabnzbd_config:
+  gitea_data:
+  gitea_config:
+  drone_config:
+  code-server_config:
+  pihole_config:
+  pihole_dns:
+  wireguard_config:
+  nextcloud_config:
+  nextcloud_data:
+  minio_config:
+  minio_data:
+  grafana_config:
+  prometheus_config:
+  influxdb_config:
+  portainer_data:
+
+services:
+  # =========================================================================
+  # MANAGEMENT
+  # =========================================================================
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: minirack-portainer
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    profiles:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9443/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # HOMELAB - Media & Downloads
+  # =========================================================================
+
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: minirack-plex
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "32400:32400"
+    volumes:
+      - plex_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:32400/web/index.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: minirack-jellyfin
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    container_name: minirack-transmission
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    volumes:
+      - transmission_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: minirack-sabnzbd
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "8080:8080"
+    volumes:
+      - sabnzbd_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # DEV - Git, CI/CD, Development
+  # =========================================================================
+
+  gitea:
+    image: gitea/gitea:latest
+    container_name: minirack-gitea
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    volumes:
+      - gitea_data:/data
+      - gitea_config:/etc/gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite
+    profiles:
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  drone:
+    image: drone/drone:latest
+    container_name: minirack-drone
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "8081:80"
+      - "443:443"
+    volumes:
+      - drone_config:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DRONE_GITEA_SERVER=${DRONE_GITEA_SERVER:-http://gitea:3000}
+      - DRONE_GITEA_CLIENT_ID=${DRONE_GITEA_CLIENT_ID}
+      - DRONE_GITEA_CLIENT_SECRET=${DRONE_GITEA_CLIENT_SECRET}
+      - DRONE_RPC_SECRET=${DRONE_RPC_SECRET}
+      - DRONE_SERVER_HOST=${DRONE_SERVER_HOST:-drone.local}
+      - DRONE_SERVER_PROTO=${DRONE_SERVER_PROTO:-http}
+    profiles:
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  code-server:
+    image: codercom/code-server:latest
+    container_name: minirack-code-server
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "8443:8443"
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8443"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # NETWORKING - DNS, VPN, Ad-blocking
+  # =========================================================================
+
+  pihole:
+    image: pihole/pihole:latest
+    container_name: minirack-pihole
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8082:80/tcp"
+    volumes:
+      - pihole_config:/etc/pihole
+      - pihole_dns:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - TZ=America/New_York
+      - WEBPASSWORD=${PIHOLE_WEBPASSWORD}
+      - FTLCONF_LOCAL_IPV4=${PIHOLE_IP:-192.168.1.2}
+    profiles:
+      - networking
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: minirack-wireguard
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+    ports:
+      - "51820:51820/udp"
+    volumes:
+      - wireguard_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - SERVERPORT=51820
+      - PEERS=${WG_PEERS:-3}
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    profiles:
+      - networking
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:51820"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # STORAGE - Nextcloud, MinIO
+  # =========================================================================
+
+  nextcloud:
+    image: nextcloud:latest
+    container_name: minirack-nextcloud
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+      - minirack-backend
+    ports:
+      - "8083:80"
+    volumes:
+      - nextcloud_config:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    environment:
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - storage
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    image: mariadb:latest
+    container_name: minirack-nextcloud-db
+    restart: unless-stopped
+    networks:
+      - minirack-backend
+    volumes:
+      - nextcloud_config:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    profiles:
+      - storage
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  minio:
+    image: minio/minio:latest
+    container_name: minirack-minio
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+      - minirack-backend
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    profiles:
+      - storage
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # MONITORING - Grafana, Prometheus, InfluxDB
+  # =========================================================================
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: minirack-grafana
+    restart: unless-stopped
+    networks:
+      - minirack-frontend
+      - minirack-monitor
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana_config:/var/lib/grafana
+    profiles:
+      - monitoring
+      - homelab
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: minirack-prometheus
+    restart: unless-stopped
+    networks:
+      - minirack-monitor
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_config:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    profiles:
+      - monitoring
+      - homelab
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  influxdb:
+    image: influxdb:latest
+    container_name: minirack-influxdb
+    restart: unless-stopped
+    networks:
+      - minirack-monitor
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_config:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=minirack
+      - DOCKER_INFLUXDB_INIT_BUCKET=minirack
+    profiles:
+      - monitoring
+      - homelab
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
