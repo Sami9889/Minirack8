@@ -15,11 +15,28 @@ Permanent, production-ready blueprints for the MiniRack8.
 
 ## Quick Start
 
+### Option 1: One-Command Install (Recommended)
+
 ```bash
+# Install Docker and deploy a profile in one step
+curl -fsSL https://raw.githubusercontent.com/minirackhq/blueprints/main/scripts/install-docker.sh | sudo bash
+```
+
+### Option 2: Manual Installation
+
+```bash
+# 1. Install Docker
+sudo bash scripts/install-docker.sh
+
+# 2. Clone the repository
 git clone https://github.com/minirackhq/blueprints.git
 cd blueprints
+
+# 3. Configure environment
 cp .env.example .env
-# Edit .env and set required passwords
+nano .env  # Set secure passwords
+
+# 4. Deploy a profile
 ./scripts/deploy.sh --profile homelab
 ```
 
@@ -82,10 +99,9 @@ blueprints/
 │   │   └── clone-template.sh
 │   └── README.md
 ├── scripts/
-│   └── deploy.sh
-├── docs/
-│   └── SECURITY.md
-├── .env.example
+│   ├── deploy.sh
+│   ├── install-docker.sh
+│   └── backup.sh
 └── README.md
 ```
 
