@@ -1,9 +1,0 @@
-version: "3.9"
-
-include:
-  - profiles/homelab.yml
-  - profiles/dev.yml
-  - profiles/networking.yml
-  - profiles/storage.yml
-  - profiles/ai.yml
-  - profiles/monitoring.yml

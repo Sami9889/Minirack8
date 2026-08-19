@@ -18,6 +18,8 @@ Permanent, production-ready blueprints for the MiniRack8.
 ```bash
 git clone https://github.com/minirackhq/blueprints.git
 cd blueprints
+cp .env.example .env
+# Edit .env and set required passwords
 ./scripts/deploy.sh --profile homelab
 ```
 
@@ -29,9 +31,8 @@ cd blueprints
 | `dev` | Gitea, Drone CI, code-server | 6GB |
 | `networking` | Pi-hole, WireGuard | 2GB |
 | `storage` | Nextcloud, MariaDB, MinIO | 4GB |
-| `ai` | Ollama, Open WebUI | 8GB |
 | `monitoring` | Grafana, Prometheus, InfluxDB | 2GB |
-| `full` | All of the above | 16GB |
+| `full` | All services | 16GB |
 
 ## K3s Clusters
 
@@ -50,6 +51,12 @@ cd blueprints
 
 Pre-built VM templates available in `proxmox/` for rapid provisioning.
 
+## Security
+
+All secrets are managed via environment variables. Never commit `.env` to version control.
+
+See `docs/SECURITY.md` for hardening guidelines.
+
 ## Repository Structure
 
 ```
@@ -57,12 +64,10 @@ blueprints/
 ├── docker-compose/
 │   ├── docker-compose.yml
 │   └── profiles/
-│       ├── default.yml
 │       ├── homelab.yml
 │       ├── dev.yml
 │       ├── networking.yml
 │       ├── storage.yml
-│       ├── ai.yml
 │       ├── monitoring.yml
 │       └── full.yml
 ├── k3s/
@@ -78,6 +83,9 @@ blueprints/
 │   └── README.md
 ├── scripts/
 │   └── deploy.sh
+├── docs/
+│   └── SECURITY.md
+├── .env.example
 └── README.md
 ```
 
