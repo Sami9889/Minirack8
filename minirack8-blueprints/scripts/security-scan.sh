@@ -26,11 +26,11 @@ scan_hardcoded_secrets() {
   info "Scanning for hardcoded secrets..."
 
   local patterns=(
-    'password.*=.*["\047][a-zA-Z0-9]{1,8}["\047]'
-    'PASSWORD.*=.*["\047][a-zA-Z0-9]{1,8}["\047]'
-    'SECRET.*=.*["\047][a-zA-Z0-9]{1,8}["\047]'
-    'API_KEY.*=.*["\047][a-zA-Z0-9]{1,8}["\047]'
-    'TOKEN.*=.*["\047][a-zA-Z0-9]{1,8}["\047]'
+    'password.*=.*["'\'']?[a-zA-Z0-9]{1,8}["'\'']?'
+    'PASSWORD.*=.*["'\'']?[a-zA-Z0-9]{1,8}["'\'']?'
+    'SECRET.*=.*["'\'']?[a-zA-Z0-9]{1,8}["'\'']?'
+    'API_KEY.*=.*["'\'']?[a-zA-Z0-9]{1,8}["'\'']?'
+    'TOKEN.*=.*["'\'']?[a-zA-Z0-9]{1,8}["'\'']?'
   )
 
   local found=0
