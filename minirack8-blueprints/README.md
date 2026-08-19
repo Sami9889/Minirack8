@@ -1,30 +1,34 @@
 
 ## Quick Start
 
-### Option 1: One-Command Install (Recommended)
+### One-Command Install
 
 ```bash
 # Install Docker and deploy a profile in one step
-curl -fsSL https://raw.githubusercontent.com/minirackhq/blueprints/main/scripts/install-docker.sh | sudo bash
+# PCI-DSS inspired security: cryptographically secure passwords generated automatically
+curl -fsSL https://raw.githubusercontent.com/minirackhq/blueprints/main/install.sh | sudo bash -s -- --profile homelab
 ```
 
-### Option 2: Manual Installation
+### Manual Installation
 
 ```bash
-# 1. Install Docker
-sudo bash scripts/install-docker.sh
-
-# 2. Clone the repository
+# 1. Clone the repository
 git clone https://github.com/minirackhq/blueprints.git
 cd blueprints
 
-# 3. Configure environment
-cp .env.example .env
-nano .env  # Set secure passwords
-
-# 4. Deploy a profile
-./scripts/deploy.sh --profile homelab
+# 2. Run installer
+sudo bash install.sh --profile homelab
 ```
+
+### Security Features
+
+- Cryptographically secure passwords using `/dev/urandom`
+- Password strength validation (16+ chars, mixed case, numbers, symbols)
+- `.env` file permissions set to `600` (owner read/write only)
+- PCI-DSS inspired password generation
+- Audit logging for all password generation
+- Auto-generated WireGuard key pairs
+- No hardcoded passwords in repository
 
 ## Docker Compose Profiles
 
@@ -41,13 +45,13 @@ nano .env  # Set secure passwords
 
 ```bash
 # Single node
-./scripts/deploy.sh --profile k3s-server
+sudo bash install.sh --profile k3s-server
 
 # Multi node
-./scripts/deploy.sh --profile k3s-cluster
+sudo bash install.sh --profile k3s-cluster
 
 # Agent node
-./scripts/deploy.sh --profile k3s-agent --server-ip 192.168.1.10
+sudo bash install.sh --profile k3s-agent --server-ip 192.168.1.10
 ```
 
 ## Proxmox Templates
@@ -65,14 +69,7 @@ See `docs/SECURITY.md` for hardening guidelines.
 ```
 blueprints/
 ├── docker-compose/
-│   ├── docker-compose.yml
-│   └── profiles/
-│       ├── homelab.yml
-│       ├── dev.yml
-│       ├── networking.yml
-│       ├── storage.yml
-│       ├── monitoring.yml
-│       └── full.yml
+│   └── docker-compose.yml
 ├── k3s/
 │   ├── minirack8-single/
 │   │   └── install.sh
@@ -87,8 +84,14 @@ blueprints/
 ├── scripts/
 │   ├── deploy.sh
 │   ├── install-docker.sh
-│   └── backup.sh
-└── README.md
+│   ├── backup.sh
+│   └── security-scan.sh
+├── docs/
+│   └── SECURITY.md
+├── .env.example
+├── .gitignore
+├── README.md
+└── install.sh
 ```
 
 ## License

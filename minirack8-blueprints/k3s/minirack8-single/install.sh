@@ -5,6 +5,8 @@
 # =============================================================================
 
 set -euo pipefail
+set -o nounset
+set -o errtrace
 
 MINIRACK_K3S_VERSION="v1.28.0+k3s1"
 MINIRACK_K3S_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,7 +42,7 @@ check_requirements() {
 }
 
 validate_ip() {
-  local ip="$1"
+  local ip="${1:?IP address required}"
   local regex='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
   if [[ ! ${ip} =~ ${regex} ]]; then
     fail "Invalid IP address format: ${ip}"
@@ -51,6 +53,14 @@ validate_ip() {
       fail "Invalid IP address: ${ip}"
     fi
   done
+}
+
+validate_hostname() {
+  local hostname="${1:?hostname required}"
+  local regex='^[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]$'
+  if [[ ! ${hostname} =~ ${regex} ]]; then
+    fail "Invalid hostname: ${hostname}"
+  fi
 }
 
 # =============================================================================
@@ -106,12 +116,17 @@ install_k3s_server() {
   local k3s_url="https://github.com/k3s-io/k3s/releases/download/${MINIRACK_K3S_VERSION}/k3s"
   info "Downloading K3s from ${k3s_url}"
 
-  curl -sfL "${k3s_url}" -o /usr/local/bin/k3s
+  curl -fsSL "${k3s_url}" -o /usr/local/bin/k3s
   chmod +x /usr/local/bin/k3s
 
   # Create kubeconfig directory
   mkdir -p "${MINIRACK_INSTALL_DIR}"
   chmod 755 "${MINIRACK_INSTALL_DIR}"
+
+  # Get primary IP for TLS SAN
+  local primary_ip
+  primary_ip=$(hostname -I | awk '{print $1}')
+  validate_ip "${primary_ip}"
 
   # Start K3s server
   info "Starting K3s server..."
@@ -122,7 +137,7 @@ install_k3s_server() {
     --disable traefik \
     --disable servicelb \
     --disable local-storage \
-    --tls-san "$(hostname -I | awk '{print $1}')" \
+    --tls-san "${primary_ip}" \
     --tls-san 127.0.0.1 \
     --log "${MINIRACK_INSTALL_DIR}/server.log" &
 
@@ -161,17 +176,20 @@ install_k3s_agent() {
   # Download K3s binary
   local k3s_url="https://github.com/k3s-io/k3s/releases/download/${MINIRACK_K3S_VERSION}/k3s"
   info "Downloading K3s from ${k3s_url}"
-  curl -sfL "${k3s_url}" -o /usr/local/bin/k3s
+  curl -fsSL "${k3s_url}" -o /usr/local/bin/k3s
   chmod +x /usr/local/bin/k3s
 
   # Get token from server
   info "Retrieving join token from server..."
   local token
-  token="$(ssh -o StrictHostKeyChecking=no "root@${server_ip}" "cat ${token_file}")"
+  token="$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "root@${server_ip}" "cat ${token_file}")"
 
   if [[ -z "${token}" ]]; then
     fail "Failed to retrieve node token from server."
   fi
+
+  # Sanitize token
+  token="${token//[^a-zA-Z0-9+/=]/}"
 
   # Start K3s agent
   k3s agent \

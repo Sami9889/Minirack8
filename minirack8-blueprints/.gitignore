@@ -1,0 +1,47 @@
+# MiniRack8 Blueprints .gitignore
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Secrets
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs
+logs/
+*.log
+
+# Backups
+backups/
+*.tar.gz
+*.zip
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Docker
+.docker/
+
+# K3s
+/var/lib/rancher/minirack8/
+
+# Proxmox
+*.img
+
+# Audit logs
+password-generation-*.log

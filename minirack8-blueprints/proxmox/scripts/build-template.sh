@@ -5,6 +5,8 @@
 # =============================================================================
 
 set -euo pipefail
+set -o nounset
+set -o errtrace
 
 # Configuration (override via environment variables)
 PROXMOX_NODE="${PROXMOX_NODE:-pve}"
@@ -26,9 +28,37 @@ fail() { echo -e "\033[0;31m[FAIL]\033[0m $*"; exit 1; }
 # =============================================================================
 
 validate_port() {
-  local port="$1"
+  local port="${1:?port required}"
   if ! [[ "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
     fail "Invalid port number: ${port}. Must be 1-65535."
+  fi
+}
+
+validate_vmid() {
+  local vmid="${1:?vmid required}"
+  if ! [[ "${vmid}" =~ ^[0-9]+$ ]]; then
+    fail "Invalid VMID: ${vmid}. Must be numeric."
+  fi
+  if (( vmid < 100 || vmid > 999999999 )); then
+    fail "VMID out of range: ${vmid}. Must be 100-999999999."
+  fi
+}
+
+validate_name() {
+  local name="${1:?name required}"
+  local regex='^[a-zA-Z0-9][a-zA-Z0-9\-_\.]*[a-zA-Z0-9]$'
+  if [[ ! ${name} =~ ${regex} ]]; then
+    fail "Invalid name: ${name}. Must start/end with alphanumeric, contain only alphanumeric, dash, underscore, dot."
+  fi
+  if [[ ${#name} -gt 100 ]]; then
+    fail "Name too long: ${name}. Must be 100 characters or less."
+  fi
+}
+
+validate_disk_size() {
+  local size="${1:?disk size required}"
+  if ! [[ "${size}" =~ ^[0-9]+[GM]$ ]]; then
+    fail "Invalid disk size format: ${size}. Must end with G or M."
   fi
 }
 
@@ -45,14 +75,13 @@ main() {
   [[ -z "${PM_API_TOKEN_ID:-}" ]] && fail "PM_API_TOKEN_ID is required."
   [[ -z "${PM_API_TOKEN_SECRET:-}" ]] && fail "PM_API_TOKEN_SECRET is required."
 
-  # Validate numeric parameters
+  # Validate inputs
+  validate_vmid "${TEMPLATE_VMID}"
+  validate_name "${TEMPLATE_NAME}"
   validate_port "${MEMORY}"
   validate_port "${CORES}"
-
-  # Validate disk size format
-  if ! [[ "${DISK_SIZE}" =~ ^[0-9]+[GM]$ ]]; then
-    fail "Invalid disk size format: ${DISK_SIZE}. Must end with G or M."
-  fi
+  validate_disk_size "${DISK_SIZE}"
+  validate_name "${BRIDGE}"
 
   info "Downloading Ubuntu ${UBUNTU_VERSION} cloud image..."
   local image_url="https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
@@ -72,7 +101,7 @@ main() {
     --name "${TEMPLATE_NAME}" \
     --memory "${MEMORY}" \
     --cores "${CORES}" \
-    --net0 virtio,bridge=${BRIDGE} \
+    --net0 virtio,bridge="${BRIDGE}" \
     --scsihw virtio-scsi-pci \
     --ostype l26 \
     --agent 1

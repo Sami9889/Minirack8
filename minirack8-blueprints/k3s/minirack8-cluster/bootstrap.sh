@@ -5,6 +5,8 @@
 # =============================================================================
 
 set -euo pipefail
+set -o nounset
+set -o errtrace
 
 MINIRACK_K3S_VERSION="v1.28.0+k3s1"
 MINIRACK_CLUSTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +32,7 @@ check_requirements() {
 }
 
 validate_ip() {
-  local ip="$1"
+  local ip="${1:?IP address required}"
   local regex='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
   if [[ ! ${ip} =~ ${regex} ]]; then
     fail "Invalid IP address format: ${ip}"
@@ -38,9 +40,17 @@ validate_ip() {
   IFS='.' read -r -a octets <<< "${ip}"
   for octet in "${octets[@]}"; do
     if (( octet > 255 )); then
-      fail "Invalid IP address: ${ip}"
+      fail "Invalid IP address: ${ip} (octet ${octet} > 255)"
     fi
   done
+}
+
+validate_hostname() {
+  local hostname="${1:?hostname required}"
+  local regex='^[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]$'
+  if [[ ! ${hostname} =~ ${regex} ]]; then
+    fail "Invalid hostname: ${hostname}"
+  fi
 }
 
 # =============================================================================
@@ -53,14 +63,17 @@ bootstrap_server() {
 
   info "Bootstrapping K3s server at ${server_ip}..."
 
-  # Copy server script to remote
-  scp -o StrictHostKeyChecking=no "${MINIRACK_CLUSTER_DIR}/server.sh" "root@${server_ip}:/tmp/minirack8-server.sh"
+  # Copy server script to remote with restricted permissions
+  scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "${MINIRACK_CLUSTER_DIR}/server.sh" "root@${server_ip}:/tmp/minirack8-server.sh"
 
   # Execute server script
-  ssh -o StrictHostKeyChecking=no "root@${server_ip}" "bash /tmp/minirack8-server.sh"
+  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "root@${server_ip}" "bash /tmp/minirack8-server.sh"
 
   # Clean up
-  ssh -o StrictHostKeyChecking=no "root@${server_ip}" "rm -f /tmp/minirack8-server.sh"
+  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "root@${server_ip}" "rm -f /tmp/minirack8-server.sh"
 
   info "Server bootstrapped at ${server_ip}"
 }
@@ -86,20 +99,26 @@ bootstrap_agents() {
   # Retrieve join token from server
   info "Retrieving join token from server..."
   local token
-  token="$(ssh -o StrictHostKeyChecking=no "root@${server_ip}" "cat ${MINIRACK_INSTALL_DIR}/server/node-token")"
+  token="$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "root@${server_ip}" "cat ${MINIRACK_INSTALL_DIR}/server/node-token")"
 
   if [[ -z "${token}" ]]; then
     fail "Failed to retrieve node token from server."
   fi
 
+  # Sanitize token for safe use in scripts
+  token="${token//[^a-zA-Z0-9+/=]/}"
+
   # Bootstrap each agent
   for agent_ip in "${agents[@]}"; do
     info "Bootstrapping agent at ${agent_ip}..."
 
-    # Create agent script
-    cat > /tmp/minirack8-agent.sh << EOF
+    # Create agent script with proper escaping
+    cat > /tmp/minirack8-agent.sh << AGENTEOF
 #!/usr/bin/env bash
 set -euo pipefail
+set -o nounset
+set -o errtrace
 
 # Install K3s agent
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${MINIRACK_K3S_VERSION}' sh -s - agent \
@@ -107,16 +126,20 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${MINIRACK_K3S_VERSION}' sh 
   --token '${token}' \
   --node-name minirack8-worker \
   --log '${MINIRACK_INSTALL_DIR}/agent.log'
-EOF
+AGENTEOF
 
-    chmod +x /tmp/minirack8-agent.sh
+    chmod 700 /tmp/minirack8-agent.sh
 
-    # Copy and execute
-    scp -o StrictHostKeyChecking=no /tmp/minirack8-agent.sh "root@${agent_ip}:/tmp/minirack8-agent.sh"
-    ssh -o StrictHostKeyChecking=no "root@${agent_ip}" "bash /tmp/minirack8-agent.sh"
+    # Copy and execute with restricted permissions
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      /tmp/minirack8-agent.sh "root@${agent_ip}:/tmp/minirack8-agent.sh"
+
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      "root@${agent_ip}" "bash /tmp/minirack8-agent.sh"
 
     # Clean up
-    ssh -o StrictHostKeyChecking=no "root@${agent_ip}" "rm -f /tmp/minirack8-agent.sh"
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      "root@${agent_ip}" "rm -f /tmp/minirack8-agent.sh"
     rm -f /tmp/minirack8-agent.sh
 
     info "Agent ${agent_ip} bootstrapped successfully."
@@ -131,8 +154,11 @@ verify_cluster() {
   local server_ip="${1:?server ip required}"
 
   info "Verifying cluster status..."
-  ssh -o StrictHostKeyChecking=no "root@${server_ip}" << EOF
+  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "root@${server_ip}" << VERIFYEOF
 set -euo pipefail
+set -o nounset
+set -o errtrace
+
 export KUBECONFIG=${MINIRACK_INSTALL_DIR}/kubeconfig
 
 echo "=== Cluster Nodes ==="
@@ -143,7 +169,7 @@ kubectl get pods -A
 
 echo -e "\n=== MiniRack8 Namespace ==="
 kubectl get all -n minirack8
-EOF
+VERIFYEOF
 }
 
 # =============================================================================
