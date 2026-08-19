@@ -1,0 +1,99 @@
+version: "3.9"
+
+networks:
+  minirack:
+    driver: bridge
+
+volumes:
+  plex_config:
+  jellyfin_config:
+  transmission_config:
+  sabnzbd_config:
+
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: minirack-plex
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "32400:32400"
+    volumes:
+      - plex_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    profiles:
+      - homelab
+      - full
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: minirack-jellyfin
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    profiles:
+      - homelab
+      - full
+
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    container_name: minirack-transmission
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    volumes:
+      - transmission_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    profiles:
+      - homelab
+      - full
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: minirack-sabnzbd
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "8080:8080"
+    volumes:
+      - sabnzbd_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    profiles:
+      - homelab
+      - full

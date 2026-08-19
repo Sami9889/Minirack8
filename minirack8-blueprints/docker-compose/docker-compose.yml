@@ -1,0 +1,112 @@
+services:
+  pihole:
+    extends:
+      file: networking.yml
+      service: pihole
+    networks:
+      - minirack
+
+  wireguard:
+    extends:
+      file: networking.yml
+      service: wireguard
+    networks:
+      - minirack
+
+  plex:
+    extends:
+      file: homelab.yml
+      service: plex
+    networks:
+      - minirack
+
+  transmission:
+    extends:
+      file: homelab.yml
+      service: transmission
+    networks:
+      - minirack
+
+  sabnzbd:
+    extends:
+      file: homelab.yml
+      service: sabnzbd
+    networks:
+      - minirack
+
+  jellyfin:
+    extends:
+      file: homelab.yml
+      service: jellyfin
+    networks:
+      - minirack
+
+  gitea:
+    extends:
+      file: dev.yml
+      service: gitea
+    networks:
+      - minirack
+
+  code-server:
+    extends:
+      file: dev.yml
+      service: code-server
+    networks:
+      - minirack
+
+  nextcloud:
+    extends:
+      file: storage.yml
+      service: nextcloud
+    networks:
+      - minirack
+
+  db:
+    extends:
+      file: storage.yml
+      service: db
+    networks:
+      - minirack
+
+  minio:
+    extends:
+      file: storage.yml
+      service: minio
+    networks:
+      - minirack
+
+  ollama:
+    extends:
+      file: ai.yml
+      service: ollama
+    networks:
+      - minirack
+
+  open-webui:
+    extends:
+      file: ai.yml
+      service: open-webui
+    networks:
+      - minirack
+
+  grafana:
+    extends:
+      file: monitoring.yml
+      service: grafana
+    networks:
+      - minirack
+
+  prometheus:
+    extends:
+      file: monitoring.yml
+      service: prometheus
+    networks:
+      - minirack
+
+  influxdb:
+    extends:
+      file: monitoring.yml
+      service: influxdb
+    networks:
+      - minirack

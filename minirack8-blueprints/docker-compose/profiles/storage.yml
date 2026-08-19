@@ -1,0 +1,82 @@
+version: "3.9"
+
+networks:
+  minirack:
+    driver: bridge
+
+volumes:
+  nextcloud_config:
+  nextcloud_data:
+  minio_config:
+  minio_data:
+
+services:
+  nextcloud:
+    image: nextcloud:latest
+    container_name: minirack-nextcloud
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "8083:80"
+    volumes:
+      - nextcloud_config:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    environment:
+      - MYSQL_PASSWORD=changeme
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_HOST=db
+    depends_on:
+      - db
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    profiles:
+      - storage
+      - full
+
+  db:
+    image: mariadb:latest
+    container_name: minirack-nextcloud-db
+    restart: unless-stopped
+    networks:
+      - minirack
+    volumes:
+      - nextcloud_config:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=changeme
+      - MYSQL_PASSWORD=changeme
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    profiles:
+      - storage
+      - full
+
+  minio:
+    image: minio/minio:latest
+    container_name: minirack-minio
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=changeme
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    profiles:
+      - storage
+      - full

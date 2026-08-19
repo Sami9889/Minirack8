@@ -1,0 +1,51 @@
+version: "3.9"
+
+networks:
+  minirack:
+    driver: bridge
+
+volumes:
+  ollama_config:
+  ollama_models:
+  openwebui:
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: minirack-ollama
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+    profiles:
+      - ai
+      - full
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: minirack-openwebui
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "3001:8080"
+    volumes:
+      - openwebui:/app/backend/data
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    profiles:
+      - ai
+      - full
