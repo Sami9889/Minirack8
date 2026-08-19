@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniRackHQ - Docker & K3s Clusters</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #0a0a0a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .rocker {
+    width: 100%;
+    max-width: 1200px;
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+    border: 1px solid #30363d;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+    position: relative;
+  }
+
+  .rocker::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #58a6ff, #1f6feb, #238636, #2ea043, #58a6ff);
+  }
+
+  .rocker::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #2ea043, #238636, #1f6feb, #58a6ff, #2ea043);
+  }
+
+  .header {
+    padding: 50px 60px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #21262d;
+    position: relative;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .logo-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #1f6feb, #58a6ff);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 6px 20px rgba(31, 111, 235, 0.5);
+    position: relative;
+  }
+
+  .logo-icon::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    bottom: -3px;
+    left: -3px;
+    border-radius: 14px;
+    border: 2px solid #58a6ff;
+    opacity: 0.3;
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo-main {
+    font-size: 28px;
+    font-weight: 800;
+    color: #f0f6fc;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-sub {
+    font-size: 13px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 2px;
+  }
+
+  .badge {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    color: white;
+    padding: 10px 22px;
+    border-radius: 25px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    box-shadow: 0 6px 20px rgba(35, 134, 54, 0.4);
+    animation: glow 3s ease-in-out infinite;
+  }
+
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 6px 20px rgba(35, 134, 54, 0.4); }
+    50% { box-shadow: 0 6px 30px rgba(35, 134, 54, 0.7); }
+  }
+
+  .hero {
+    padding: 50px 60px;
+    text-align: center;
+    position: relative;
+  }
+
+  .hero-label {
+    display: inline-block;
+    background: #1f6feb20;
+    color: #58a6ff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 20px;
+    border: 1px solid #1f6feb40;
+  }
+
+  .hero-title {
+    font-size: 52px;
+    font-weight: 900;
+    color: #f0f6fc;
+    margin-bottom: 20px;
+    line-height: 1.1;
+    letter-spacing: -1.5px;
+  }
+
+  .hero-title .highlight {
+    background: linear-gradient(135deg, #58a6ff, #1f6feb);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-subtitle {
+    font-size: 20px;
+    color: #8b949e;
+    max-width: 900px;
+    margin: 0 auto;
+    line-height: 1.6;
+    font-weight: 400;
+  }
+
+  .stack-preview {
+    padding: 0 60px 40px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  .stack-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 20px 25px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    min-width: 200px;
+  }
+
+  .stack-card:hover {
+    border-color: #58a6ff;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(88, 166, 255, 0.15);
+  }
+
+  .stack-icon {
+    font-size: 28px;
+    width: 48px;
+    height: 48px;
+    background: #0d1117;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #30363d;
+  }
+
+  .stack-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stack-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f0f6fc;
+    margin-bottom: 3px;
+  }
+
+  .stack-type {
+    font-size: 12px;
+    color: #8b949e;
+  }
+
+  .features {
+    padding: 0 60px 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .feature {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 14px;
+    padding: 30px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feature::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #58a6ff, #1f6feb);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .feature:hover::before {
+    opacity: 1;
+  }
+
+  .feature:hover {
+    border-color: #30363d;
+    transform: translateY(-4px);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .feature-icon {
+    font-size: 36px;
+    margin-bottom: 15px;
+  }
+
+  .feature-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #f0f6fc;
+    margin-bottom: 10px;
+  }
+
+  .feature-desc {
+    font-size: 14px;
+    color: #8b949e;
+    line-height: 1.6;
+  }
+
+  .code-preview {
+    margin: 0 60px 40px;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 25px 30px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #8b949e;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .code-preview::before {
+    content: 'ONE COMMAND DEPLOY';
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 10px;
+    color: #238636;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .code-line {
+    margin: 5px 0;
+  }
+
+  .code-comment {
+    color: #484f58;
+    font-style: italic;
+  }
+
+  .code-keyword {
+    color: #ff7b72;
+  }
+
+  .code-string {
+    color: #a5d6ff;
+  }
+
+  .code-cmd {
+    color: #58a6ff;
+  }
+
+  .cta-section {
+    margin: 0 60px 50px;
+    background: linear-gradient(135deg, #1f6feb15, #23863610);
+    border: 1px solid #1f6feb30;
+    border-radius: 14px;
+    padding: 30px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .cta-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cta-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f0f6fc;
+    margin-bottom: 8px;
+  }
+
+  .cta-desc {
+    font-size: 14px;
+    color: #8b949e;
+  }
+
+  .cta-buttons {
+    display: flex;
+    gap: 12px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    color: white;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(35, 134, 54, 0.3);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(35, 134, 54, 0.5);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: #58a6ff;
+    border: 1px solid #58a6ff;
+    padding: 14px 32px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-secondary:hover {
+    background: #58a6ff15;
+    transform: translateY(-2px);
+  }
+
+  .footer {
+    padding: 25px 60px;
+    border-top: 1px solid #21262d;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-brand {
+    font-size: 14px;
+    color: #8b949e;
+  }
+
+  .footer-brand strong {
+    color: #f0f6fc;
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 25px;
+  }
+
+  .footer-link {
+    color: #8b949e;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: color 0.3s ease;
+  }
+
+  .footer-link:hover {
+    color: #58a6ff;
+  }
+
+  .github-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #8b949e;
+    font-size: 13px;
+  }
+
+  @media (max-width: 768px) {
+    .header {
+      padding: 30px 25px 25px;
+      flex-direction: column;
+      gap: 15px;
+      align-items: flex-start;
+    }
+
+    .hero {
+      padding: 40px 25px;
+    }
+
+    .hero-title {
+      font-size: 36px;
+    }
+
+    .hero-subtitle {
+      font-size: 16px;
+    }
+
+    .stack-preview {
+      padding: 0 25px 30px;
+    }
+
+    .features {
+      padding: 0 25px 30px;
+    }
+
+    .code-preview {
+      margin: 0 25px 30px;
+      padding: 20px;
+    }
+
+    .cta-section {
+      margin: 0 25px 30px;
+      padding: 25px;
+      flex-direction: column;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .cta-buttons {
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .btn-primary, .btn-secondary {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .footer {
+      padding: 20px 25px;
+      flex-direction: column;
+      gap: 15px;
+      align-items: flex-start;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="rocker">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">MR</div>
+        <div class="logo-text">
+          <div class="logo-main">MiniRackHQ</div>
+          <div class="logo-sub">Docker & K3s Clusters</div>
+        </div>
+      </div>
+      <div class="badge">GitHub Public</div>
+    </div>
+
+    <div class="hero">
+      <div class="hero-label">MiniRack8 Blueprint Repository</div>
+      <h1 class="hero-title">Permanent <span class="highlight">Plug & Play</span> Blueprints</h1>
+      <p class="hero-subtitle">Instead of writing configs from scratch, users instantly access production-ready templates optimized for MiniRack8 hardware — Docker Compose, Proxmox, and K3s cluster configurations, all tested and ready to deploy.</p>
+    </div>
+
+    <div class="stack-preview">
+      <div class="stack-card">
+        <div class="stack-icon">🐳</div>
+        <div class="stack-info">
+          <div class="stack-name">Docker Compose</div>
+          <div class="stack-type">Prebuilt Stack</div>
+        </div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">📦</div>
+        <div class="stack-info">
+          <div class="stack-name">Proxmox</div>
+          <div class="stack-type">VM Templates</div>
+        </div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-icon">☸️</div>
+        <div class="stack-info">
+          <div class="stack-name">K3s Clusters</div>
+          <div class="stack-type">Lightweight K8s</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🚀</div>
+        <div class="feature-title">Instant Deployment</div>
+        <div class="feature-desc">Clone the repository, select a preconfigured profile, and execute a single command to deploy a complete multi-node setup.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">✅</div>
+        <div class="feature-title">Tested & Optimized</div>
+        <div class="feature-desc">Every template is tested and optimized specifically for MiniRack8 airflow, power requirements, and hardware constraints.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔄</div>
+        <div class="feature-title">Always Up-to-Date</div>
+        <div class="feature-desc">Blueprints are permanently maintained in a public GitHub repository with continuous updates and community contributions.</div>
+      </div>
+    </div>
+
+    <div class="code-preview">
+      <div class="code-line"><span class="code-comment"># Deploy a complete K3s cluster in seconds</span></div>
+      <div class="code-line"><span class="code-keyword">git clone</span> <span class="code-string">https://github.com/minirackhq/blueprints</span></div>
+      <div class="code-line"><span class="code-keyword">cd</span> blueprints/k3s/minirack8</div>
+      <div class="code-line"><span class="code-cmd">./deploy.sh</span> <span class="code-string">--profile production</span></div>
+      <div class="code-line">&nbsp;</div>
+      <div class="code-line"><span class="code-comment">✓ Multi-node K3s cluster deployed</span></div>
+      <div class="code-line"><span class="code-comment">✓ Configured for MiniRack8 power & airflow</span></div>
+      <div class="code-line"><span class="code-comment">✓ Ready for workloads in under 5 minutes</span></div>
+    </div>
+
+    <div class="cta-section">
+      <div class="cta-text">
+        <div class="cta-title">Get Started with MiniRack8 Blueprints</div>
+        <div class="cta-desc">Stop configuring from scratch. Start deploying in minutes.</div>
+      </div>
+      <div class="cta-buttons">
+        <a href="#" class="btn-primary">
+          <span>⭐</span>
+          <span>Star on GitHub</span>
+        </a>
+        <a href="#" class="btn-secondary">
+          <span>📖</span>
+          <span>View Docs</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-brand">
+        <strong>MiniRackHQ</strong> · MiniRack8 Blueprint Repository
+      </div>
+      <div class="footer-links">
+        <a href="#" class="footer-link">GitHub</a>
+        <a href="#" class="footer-link">Documentation</a>
+        <a href="#" class="footer-link">Community</a>
+        <a href="#" class="footer-link">Support</a>
+      </div>
+      <div class="github-badge">
+        <span>🐙</span>
+        <span>Public Repository</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
