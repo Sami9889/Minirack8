@@ -19,6 +19,7 @@ Permanent, production-ready blueprints for the MiniRack8.
 
 ```bash
 # Install Docker and deploy a profile in one step
+# PCI-DSS inspired security: cryptographically secure passwords generated automatically
 curl -fsSL https://raw.githubusercontent.com/minirackhq/blueprints/main/install.sh | sudo bash -s -- --profile homelab
 ```
 
@@ -32,6 +33,16 @@ cd blueprints
 # 2. Run installer
 sudo bash install.sh --profile homelab
 ```
+
+### Security Features
+
+- Cryptographically secure passwords using `/dev/urandom`
+- Password strength validation (16+ chars, mixed case, numbers, symbols)
+- `.env` file permissions set to `600` (owner read/write only)
+- PCI-DSS inspired password generation
+- Audit logging for all password generation
+- Auto-generated WireGuard key pairs
+- No hardcoded passwords in repository
 
 ## Docker Compose Profiles
 

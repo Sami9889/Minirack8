@@ -42,3 +42,6 @@ Thumbs.db
 
 # Proxmox
 *.img
+
+# Audit logs
+password-generation-*.log

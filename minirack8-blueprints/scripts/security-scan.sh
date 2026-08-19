@@ -169,6 +169,59 @@ scan_missing_network_segmentation() {
   fi
 }
 
+scan_file_permissions() {
+  info "Scanning for insecure file permissions..."
+
+  local env_file="${REPO_DIR}/.env"
+  if [[ -f "${env_file}" ]]; then
+    local perms
+    perms=$(stat -c "%a" "${env_file}" 2>/dev/null || stat -f "%Lp" "${env_file}" 2>/dev/null)
+    if [[ "${perms}" == "600" ]]; then
+      info ".env file permissions are secure (600)."
+    else
+      warn ".env file permissions are insecure: ${perms}. Should be 600."
+    fi
+  else
+    info "No .env file found in repo (good)."
+  fi
+}
+
+scan_pci_dss_compliance() {
+  info "Scanning for PCI-DSS compliance..."
+
+  local found_issues=0
+
+  # Check for hardcoded passwords
+  if grep -rn -E 'PASSWORD=.*[a-zA-Z0-9]{8,}' "${REPO_DIR}" --include="*.sh" --include="*.yml" --include="*.yaml" 2>/dev/null | grep -v '.env.example' | grep -v 'generate_password' | grep -v 'security-scan.sh' > /dev/null; then
+    warn "PCI-DSS: Hardcoded passwords found."
+    found_issues=$((found_issues + 1))
+  else
+    info "PCI-DSS: No hardcoded passwords found."
+  fi
+
+  # Check for weak password generation
+  if grep -rn 'openssl rand -base64' "${REPO_DIR}" --include="*.sh" > /dev/null; then
+    info "PCI-DSS: Using /dev/urandom or openssl for password generation."
+  else
+    warn "PCI-DSS: No secure random password generation found."
+    found_issues=$((found_issues + 1))
+  fi
+
+  # Check for password length requirements
+  if grep -rn 'generate_password.*32' "${REPO_DIR}" --include="*.sh" > /dev/null; then
+    info "PCI-DSS: Passwords generated with sufficient length (32 chars)."
+  else
+    warn "PCI-DSS: Password length requirements not enforced."
+    found_issues=$((found_issues + 1))
+  fi
+
+  if [[ ${found_issues} -eq 0 ]]; then
+    info "PCI-DSS: All checks passed."
+  else
+    warn "PCI-DSS: ${found_issues} issues found."
+  fi
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -192,6 +245,10 @@ main() {
   scan_missing_resource_limits
   echo ""
   scan_missing_network_segmentation
+  echo ""
+  scan_file_permissions
+  echo ""
+  scan_pci_dss_compliance
   echo ""
 
   echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
