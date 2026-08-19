@@ -1,112 +1,438 @@
-services:
-  pihole:
-    extends:
-      file: networking.yml
-      service: pihole
-    networks:
-      - minirack
+version: "3.9"
 
-  wireguard:
-    extends:
-      file: networking.yml
-      service: wireguard
+networks:
+  minirack:
+    driver: bridge
+
+volumes:
+  plex_config:
+  jellyfin_config:
+  transmission_config:
+  sabnzbd_config:
+  gitea_data:
+  gitea_config:
+  drone_config:
+  code-server_config:
+  pihole_config:
+  pihole_dns:
+  wireguard_config:
+  nextcloud_config:
+  nextcloud_data:
+  minio_config:
+  minio_data:
+  ollama_models:
+  openwebui_data:
+  grafana_config:
+  prometheus_config:
+  influxdb_config:
+  portainer_data:
+
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: minirack-portainer
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    profiles:
+      - default
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   plex:
-    extends:
-      file: homelab.yml
-      service: plex
+    image: lscr.io/linuxserver/plex:latest
+    container_name: minirack-plex
+    restart: unless-stopped
     networks:
       - minirack
-
-  transmission:
-    extends:
-      file: homelab.yml
-      service: transmission
-    networks:
-      - minirack
-
-  sabnzbd:
-    extends:
-      file: homelab.yml
-      service: sabnzbd
-    networks:
-      - minirack
+    ports:
+      - "32400:32400"
+    volumes:
+      - plex_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   jellyfin:
-    extends:
-      file: homelab.yml
-      service: jellyfin
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: minirack-jellyfin
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    container_name: minirack-transmission
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    volumes:
+      - transmission_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: minirack-sabnzbd
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "8080:8080"
+    volumes:
+      - sabnzbd_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - homelab
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   gitea:
-    extends:
-      file: dev.yml
-      service: gitea
+    image: gitea/gitea:latest
+    container_name: minirack-gitea
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    volumes:
+      - gitea_data:/data
+      - gitea_config:/etc/gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite
+    profiles:
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  drone:
+    image: drone/drone:latest
+    container_name: minirack-drone
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "8081:80"
+      - "443:443"
+    volumes:
+      - drone_config:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DRONE_GITEA_SERVER=http://gitea:3000
+      - DRONE_GITEA_CLIENT_ID=YOUR_CLIENT_ID
+      - DRONE_GITEA_CLIENT_SECRET=YOUR_CLIENT_SECRET
+      - DRONE_RPC_SECRET=YOUR_RPC_SECRET
+      - DRONE_SERVER_HOST=drone.local
+      - DRONE_SERVER_PROTO=http
+    profiles:
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   code-server:
-    extends:
-      file: dev.yml
-      service: code-server
+    image: codercom/code-server:latest
+    container_name: minirack-code-server
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "8443:8443"
+    environment:
+      - PUID=1000
+      - PGID=1000
+    profiles:
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  pihole:
+    image: pihole/pihole:latest
+    container_name: minirack-pihole
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8082:80/tcp"
+    volumes:
+      - pihole_config:/etc/pihole
+      - pihole_dns:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - TZ=America/New_York
+      - WEBPASSWORD=changeme
+    profiles:
+      - networking
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: minirack-wireguard
+    restart: unless-stopped
+    networks:
+      - minirack
+    ports:
+      - "51820:51820/udp"
+    volumes:
+      - wireguard_config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - SERVERPORT=51820
+      - PEERS=3
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    profiles:
+      - networking
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   nextcloud:
-    extends:
-      file: storage.yml
-      service: nextcloud
+    image: nextcloud:latest
+    container_name: minirack-nextcloud
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "8083:80"
+    volumes:
+      - nextcloud_config:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    environment:
+      - MYSQL_PASSWORD=changeme
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_HOST=db
+    depends_on:
+      - db
+    profiles:
+      - storage
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   db:
-    extends:
-      file: storage.yml
-      service: db
+    image: mariadb:latest
+    container_name: minirack-nextcloud-db
+    restart: unless-stopped
     networks:
       - minirack
+    volumes:
+      - nextcloud_config:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=changeme
+      - MYSQL_PASSWORD=changeme
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    profiles:
+      - storage
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   minio:
-    extends:
-      file: storage.yml
-      service: minio
+    image: minio/minio:latest
+    container_name: minirack-minio
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=changeme
+    profiles:
+      - storage
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   ollama:
-    extends:
-      file: ai.yml
-      service: ollama
+    image: ollama/ollama:latest
+    container_name: minirack-ollama
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    profiles:
+      - ai
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 8g
 
   open-webui:
-    extends:
-      file: ai.yml
-      service: open-webui
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: minirack-openwebui
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "3001:8080"
+    volumes:
+      - openwebui_data:/app/backend/data
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    profiles:
+      - ai
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   grafana:
-    extends:
-      file: monitoring.yml
-      service: grafana
+    image: grafana/grafana:latest
+    container_name: minirack-grafana
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana_config:/var/lib/grafana
+    profiles:
+      - monitoring
+      - homelab
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   prometheus:
-    extends:
-      file: monitoring.yml
-      service: prometheus
+    image: prom/prometheus:latest
+    container_name: minirack-prometheus
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_config:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    profiles:
+      - monitoring
+      - homelab
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   influxdb:
-    extends:
-      file: monitoring.yml
-      service: influxdb
+    image: influxdb:latest
+    container_name: minirack-influxdb
+    restart: unless-stopped
     networks:
       - minirack
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_config:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=changeme
+      - DOCKER_INFLUXDB_INIT_ORG=minirack
+      - DOCKER_INFLUXDB_INIT_BUCKET=minirack
+    profiles:
+      - monitoring
+      - homelab
+      - dev
+      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512m
