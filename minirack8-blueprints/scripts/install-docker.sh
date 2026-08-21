@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # MiniRack8 Docker Installer
-# Professional, self-contained Docker CE installer for MiniRack8
-# No agent required - run directly on the target host
+# Production-ready Docker CE installation
 # =============================================================================
 
 set -euo pipefail
@@ -13,32 +12,70 @@ MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 MINIRACK_COMPOSE_VERSION="v2.23.0"
 MINIRACK_INSTALL_DIR="/opt/minirack8"
 
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
+
+# =============================================================================
+# UI Helpers
+# =============================================================================
 
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 fail() { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
 step() { echo -e "\n${BLUE}[STEP]${NC} $*"; }
+success() { echo -e "${GREEN}✓${NC} $*"; }
+divider() { echo -e "${DIM}──────────────────────────────────────────────────────────────${NC}"; }
 
-# =============================================================================
-# Banner
-# =============================================================================
+animate_spinner() {
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
+  while kill -0 "${pid}" 2>/dev/null; do
+    for char in ${spinstr}; do
+      printf "${CYAN}%c${NC}" "${char}"
+      sleep "${delay}"
+      printf "\b"
+    done
+  done
+}
+
+progress_bar() {
+  local current=$1
+  local total=$2
+  local width=40
+  local percentage=$((current * 100 / total))
+  local completed=$((width * current / total))
+  local remaining=$((width - completed))
+
+  printf "\r${CYAN}["
+  printf "%${completed}s" | tr ' ' '█'
+  printf "%${remaining}s" | tr ' ' '░'
+  printf "] ${percentage}%%${NC}"
+}
 
 show_banner() {
+  clear
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
 ║   MiniRack8 Docker Installer                                ║
-║   Professional Docker CE Installation                       ║
-║                                                              ║
-║   Hardware: Intel i5-13500T | 16GB RAM | 256GB SSD         ║
+║   Production-Ready Docker CE Installation                   ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
+  echo ""
+  echo -e "  ${DIM}Install Docker CE with hardened configuration${NC}"
+  echo ""
+  divider
+  echo ""
 }
 
 # =============================================================================
