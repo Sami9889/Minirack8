@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # MiniRack8 Blueprint Deploy Script
-# Enterprise-grade deployment automation for MiniRack8 hardware
-# Hardware: Intel i5-13500T | 16GB RAM | 256GB SSD
+# Production-ready deployment automation
 # =============================================================================
 
 set -euo pipefail
@@ -14,20 +13,54 @@ REPO_DIR="$(dirname "${SCRIPT_DIR}")"
 LOG_DIR="${REPO_DIR}/logs"
 AUDIT_LOG="${LOG_DIR}/deploy-$(date +%Y%m%d-%H%M%S).log"
 
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
 # =============================================================================
-# Logging Functions
+# UI Helpers
 # =============================================================================
 
 info() { echo -e "${GREEN}[INFO]${NC} $*" | tee -a "${AUDIT_LOG}"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*" | tee -a "${AUDIT_LOG}"; }
 fail() { echo -e "${RED}[FAIL]${NC} $*" | tee -a "${AUDIT_LOG}"; exit 1; }
 step() { echo -e "\n${BLUE}[STEP]${NC} $*" | tee -a "${AUDIT_LOG}"; }
+success() { echo -e "${GREEN}✓${NC} $*"; }
+divider() { echo -e "${DIM}──────────────────────────────────────────────────────────────${NC}"; }
+
+animate_spinner() {
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
+  while kill -0 "${pid}" 2>/dev/null; do
+    for char in ${spinstr}; do
+      printf "${CYAN}%c${NC}" "${char}"
+      sleep "${delay}"
+      printf "\b"
+    done
+  done
+}
+
+progress_bar() {
+  local current=$1
+  local total=$2
+  local width=40
+  local percentage=$((current * 100 / total))
+  local completed=$((width * current / total))
+  local remaining=$((width - completed))
+
+  printf "\r${CYAN}["
+  printf "%${completed}s" | tr ' ' '█'
+  printf "%${remaining}s" | tr ' ' '░'
+  printf "] ${percentage}%%${NC}"
+}
 
 init_logging() {
   mkdir -p "${LOG_DIR}"
@@ -39,21 +72,21 @@ init_logging() {
   echo "=======================================" >> "${AUDIT_LOG}"
 }
 
-# =============================================================================
-# Banner
-# =============================================================================
-
 show_banner() {
+  clear
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║   MiniRack8 Blueprint Repository - Deploy Script            ║
-║   Production-ready blueprints for MiniRack8 hardware        ║
-║                                                              ║
-║   Hardware: i5-13500T | 16GB RAM | 256GB SSD               ║
+║   MiniRack8 Blueprint Deploy Script                        ║
+║   Production-Ready Deployment Automation                    ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
+  echo ""
+  echo -e "  ${DIM}Deploy pre-configured Docker Compose profiles${NC}"
+  echo ""
+  divider
+  echo ""
 }
 
 # =============================================================================

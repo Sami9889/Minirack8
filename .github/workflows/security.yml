@@ -1,0 +1,132 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'minirack8-blueprints/**'
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'minirack8-blueprints/**'
+
+jobs:
+  security-scan:
+    name: Security Scanner
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security scanner
+        run: |
+          cd minirack8-blueprints
+          bash scripts/security-scan.sh
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+
+      - name: Run ShellCheck on all scripts
+        run: |
+          cd minirack8-blueprints
+          find . -name "*.sh" -type f | while read -r script; do
+            echo "Checking: ${script}"
+            shellcheck -x "${script}" || exit 1
+          done
+
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: |
+          pip install yamllint
+
+      - name: Run yamllint
+        run: |
+          cd minirack8-blueprints
+          yamllint -c .yamllint.yaml . || echo "No .yamllint.yaml found, using defaults"
+          yamllint -d "{extends: default, rules: {line-length: {max: 200}}}" docker-compose/ k3s/
+
+  secrets-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan for secrets
+        run: |
+          cd minirack8-blueprints
+          # Check for .env files
+          if git ls-files --others --exclude-standard | grep -E '^\.env'; then
+            echo "ERROR: .env file found in git"
+            exit 1
+          fi
+
+          # Check for hardcoded passwords in tracked files
+          if git grep -n -E 'PASSWORD=.*[a-zA-Z0-9]{8,}' -- '*.sh' '*.yml' '*.yaml' | grep -v '.env.example' | grep -v 'generate_password' | grep -v 'security-scan.sh'; then
+            echo "ERROR: Hardcoded password found"
+            exit 1
+          fi
+
+          echo "No secrets found."
+
+  docker-compose-validation:
+    name: Docker Compose Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose files
+        run: |
+          cd minirack8-blueprints
+          
+          # Install Docker Compose
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq docker-compose-plugin
+          
+          # Validate compose files
+          docker compose --profile homelab config > /dev/null
+          docker compose --profile dev config > /dev/null
+          docker compose --profile networking config > /dev/null
+          docker compose --profile storage config > /dev/null
+          docker compose --profile monitoring config > /dev/null
+          docker compose --profile full config > /dev/null
+          
+          echo "All Docker Compose profiles validated successfully."
+
+  markdown-lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install markdownlint
+        run: |
+          npm install -g markdownlint-cli
+
+      - name: Run markdownlint
+        run: |
+          cd minirack8-blueprints
+          markdownlint '**/*.md' || true
