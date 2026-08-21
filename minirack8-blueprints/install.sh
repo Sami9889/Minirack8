@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# =============================================================================
 # MiniRack8 Enterprise Provisioner
 # Production-ready deployment for Docker, K3s, and Proxmox
-# =============================================================================
 
 set -euo pipefail
 set -o nounset
 set -o errtrace
 
 MINIRACK_INSTALL_DIR="/opt/minirack8"
+# shellcheck disable=SC2034
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
+# shellcheck disable=SC2034
 MINIRACK_COMPOSE_VERSION="v2.23.0"
 
 # Colors
@@ -18,7 +18,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+# shellcheck disable=SC2034
 MAGENTA='\033[0;35m'
+# shellcheck disable=SC2034
 BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
@@ -37,6 +39,7 @@ divider() { echo -e "${DIM}─────────────────�
 animate_spinner() {
   local pid=$1
   local delay=0.1
+  # shellcheck disable=SC1003
   local spinstr='|/-\'
   while kill -0 "${pid}" 2>/dev/null; do
     for char in ${spinstr}; do
@@ -55,10 +58,92 @@ progress_bar() {
   local completed=$((width * current / total))
   local remaining=$((width - completed))
 
+  # shellcheck disable=SC2059
   printf "\r${CYAN}["
   printf "%${completed}s" | tr ' ' '█'
   printf "%${remaining}s" | tr ' ' '░'
   printf "] ${percentage}%%${NC}"
+}
+
+self_update() {
+  step "Checking for updates..."
+
+  local script_path
+  script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  if [[ ! -d "${script_path}/.git" ]]; then
+    info "Not a git clone. Skipping self-update."
+    info "To get the latest version, re-run the install command:"
+    info "  curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile ${PROFILE}"
+    return 0
+  fi
+
+  local repo_dir
+  repo_dir="$(dirname "${script_path}")"
+
+  pushd "${repo_dir}" > /dev/null 2>&1 || return 0
+
+  local current_commit
+  current_commit=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+  local remote_url
+  remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+
+  if [[ -z "${current_commit}" || -z "${remote_url}" ]]; then
+    popd > /dev/null 2>&1 || true
+    info "No git remote configured. Skipping self-update."
+    return 0
+  fi
+
+  info "Current version: ${current_commit:0:8}"
+
+  git fetch origin > /dev/null 2>&1 || {
+    warn "Failed to fetch updates. Check network connection."
+    popd > /dev/null 2>&1 || true
+    return 0
+  }
+
+  local latest_commit
+  latest_commit=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null || echo "")
+
+  if [[ -z "${latest_commit}" ]]; then
+    popd > /dev/null 2>&1 || true
+    info "Could not determine latest version. Skipping self-update."
+    return 0
+  fi
+
+  info "Latest version:  ${latest_commit:0:8}"
+
+  if [[ "${current_commit}" == "${latest_commit}" ]]; then
+    info "Already on the latest version."
+    popd > /dev/null 2>&1 || true
+    return 0
+  fi
+
+  echo ""
+  warn "A new version is available!"
+  info "Updating from ${current_commit:0:8} to ${latest_commit:0:8}..."
+
+  git stash > /dev/null 2>&1 || true
+
+  if ! git pull --rebase origin > /dev/null 2>&1; then
+    warn "Auto-update failed. Please manually run: git pull"
+    git stash pop > /dev/null 2>&1 || true
+    popd > /dev/null 2>&1 || true
+    return 0
+  fi
+
+  git stash pop > /dev/null 2>&1 || true
+
+  info "Updated to latest version: $(git rev-parse HEAD 2>/dev/null | cut -c1-8)"
+
+  popd > /dev/null 2>&1 || true
+
+  echo ""
+  info "Re-running installer with latest version..."
+  echo ""
+
+  exec bash "${script_path}/install.sh" "$@"
 }
 
 show_banner() {
@@ -77,10 +162,6 @@ EOF
   divider
   echo ""
 }
-
-# =============================================================================
-# Validation
-# =============================================================================
 
 check_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -203,10 +284,6 @@ validate_ip() {
   done
 }
 
-# =============================================================================
-# Docker Installation
-# =============================================================================
-
 install_docker() {
   step "Checking Docker installation..."
 
@@ -284,10 +361,6 @@ EOF
 
   info "Docker installed and configured."
 }
-
-# =============================================================================
-# Secure Password Generation & Input (PCI-DSS Inspired)
-# =============================================================================
 
 generate_password() {
   local length="${1:-32}"
@@ -504,10 +577,6 @@ EOF
   warn "SECURITY: Never share .env file or commit to version control!"
 }
 
-# =============================================================================
-# Blueprint Deployment
-# =============================================================================
-
 setup_blueprints() {
   step "Setting up MiniRack8 blueprints..."
 
@@ -575,10 +644,6 @@ deploy_profile() {
   info "Profile '${profile}' deployed successfully."
 }
 
-# =============================================================================
-# Summary
-# =============================================================================
-
 show_summary() {
   local profile="${1:?profile required}"
   echo -e "\n${GREEN}═══════════════════════════════════════════════════════════════${NC}"
@@ -639,11 +704,121 @@ show_summary() {
   echo "  Backup:      ${MINIRACK_INSTALL_DIR}/scripts/backup.sh"
   echo "  Security:    ${MINIRACK_INSTALL_DIR}/scripts/security-scan.sh"
   echo ""
+
+  if [[ "${profile}" != k3s-server && "${profile}" != k3s-agent && "${profile}" != k3s-cluster ]]; then
+    show_deployment_dashboard
+  fi
 }
 
-# =============================================================================
-# Main
-# =============================================================================
+show_deployment_dashboard() {
+  echo -e "\n${CYAN}${BOLD}"
+  cat << 'EOF'
+╔══════════════════════════════════════════════════════════════╗
+║                   MINIRACK8 LIVE DASHBOARD                  ║
+╚══════════════════════════════════════════════════════════════╝
+EOF
+  echo -e "${NC}"
+
+  step "Scanning running containers..."
+
+  # Animated scanning effect
+  # shellcheck disable=SC1003
+  local spinstr='|/-\'
+  local i=0
+  for _ in $(seq 1 18); do
+    # shellcheck disable=SC2059
+    printf "\r  ${CYAN}Scanning... %c${NC}" "${spinstr:i++%${#spinstr}:1}"
+    sleep 0.05
+  done
+  # shellcheck disable=SC2059
+  printf "\r  ${GREEN}Scan complete. Found:${NC}\n"
+
+  local containers
+  containers=$(docker ps --format "{{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true)
+
+  if [[ -z "${containers}" ]]; then
+    warn "No running containers found."
+    return 0
+  fi
+
+  echo ""
+  printf "${BOLD}%-28s %-22s %s${NC}\n" "SERVICE" "STATUS" "PORTS"
+  echo -e "${DIM}$(printf '%.0s─' {1..90})${NC}"
+
+  local primary_ip
+  primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+
+  while IFS=$'\t' read -r name status ports; do
+    local status_color="${GREEN}"
+    if [[ "${status,,}" == *"unhealthy"* ]]; then
+      status_color="${RED}"
+    elif [[ "${status,,}" == *"starting"* ]]; then
+      status_color="${YELLOW}"
+    elif [[ "${status,,}" == *"restarting"* ]]; then
+      status_color="${RED}"
+    fi
+
+    local display_ports="${ports}"
+    [[ ${#display_ports} -gt 45 ]] && display_ports="${display_ports:0:42}..."
+
+    printf "%-28s ${status_color}%-22s${NC} %s\n" "${name}" "${status}" "${display_ports}"
+  done <<< "${containers}"
+
+  echo ""
+  step "Detecting service endpoints..."
+
+  echo -e "\n${BOLD}${CYAN}  Quick Access URLs:${NC}"
+  echo -e "${DIM}  ─────────────────────────────────────────────────────────────${NC}"
+
+  local found_any=false
+  while IFS=$'\t' read -r name status ports; do
+    [[ -z "${ports}" ]] && continue
+
+    local host_ports
+    host_ports=$(echo "${ports}" | grep -oE ':[0-9]+->' | sed 's/://g; s/->//g' | tr '\n' ' ')
+    [[ -z "${host_ports}" ]] && continue
+
+    for port in ${host_ports}; do
+      echo -e "  ${GREEN}✓${NC} ${name}:${DIM} http://${primary_ip}:${port}${NC}"
+      found_any=true
+    done
+  done <<< "${containers}"
+
+  if [[ "${found_any}" == false ]]; then
+    echo -e "  ${YELLOW}No published ports detected.${NC}"
+  fi
+
+  echo ""
+  step "Resource overview..."
+
+  local total_containers
+  total_containers=$(docker ps -q 2>/dev/null | wc -l)
+  echo -e "  ${CYAN}Running containers:${NC} ${total_containers}"
+
+  if command -v free &> /dev/null; then
+    local used_mem total_mem
+    used_mem=$(free -h | awk '/^Mem:/ {print $3}')
+    total_mem=$(free -h | awk '/^Mem:/ {print $2}')
+    echo -e "  ${CYAN}RAM usage:${NC} ${used_mem} / ${total_mem}"
+  fi
+
+  if command -v df &> /dev/null; then
+    local disk_usage
+    disk_usage=$(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 " used)"}')
+    echo -e "  ${CYAN}Disk usage:${NC} ${disk_usage}"
+  fi
+
+  if command -v nproc &> /dev/null; then
+    local cores
+    cores=$(nproc)
+    echo -e "  ${CYAN}CPU cores:${NC} ${cores}"
+  fi
+
+  echo ""
+  echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+  info "MiniRack8 deployment verified and operational!"
+  echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+}
 
 show_usage() {
   cat << EOF
@@ -668,6 +843,7 @@ ${YELLOW}Options:${NC}
   --skip-docker Skip Docker installation
   --skip-os-check Bypass OS compatibility check
   --force        Skip OS and Docker checks, deploy immediately
+  --no-self-update Skip automatic self-update check
   --help        Show this help
 
 ${YELLOW}Examples:${NC}
@@ -677,6 +853,7 @@ ${YELLOW}Examples:${NC}
   $0 --profile k3s-agent --server-ip 192.168.1.10
   $0 --profile homelab --skip-os-check
   $0 --profile homelab --force
+  $0 --no-self-update
 EOF
   exit 0
 }
@@ -686,7 +863,7 @@ main() {
   SERVER_IP=""
   SKIP_DOCKER=false
   SKIP_OS_CHECK=false
-  FORCE_MODE=false
+  NO_SELF_UPDATE=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -707,9 +884,12 @@ main() {
         shift
         ;;
       --force)
-        FORCE_MODE=true
         SKIP_OS_CHECK=true
         SKIP_DOCKER=true
+        shift
+        ;;
+      --no-self-update)
+        NO_SELF_UPDATE=true
         shift
         ;;
       --help|-h)
@@ -723,6 +903,10 @@ main() {
 
   [[ -z "${PROFILE}" ]] && fail "Profile is required. Use --help for options."
   validate_profile "${PROFILE}"
+
+  if [[ "${NO_SELF_UPDATE}" != true ]]; then
+    self_update "$@"
+  fi
 
   check_root
   show_banner
