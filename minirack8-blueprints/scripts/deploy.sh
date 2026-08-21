@@ -59,6 +59,85 @@ progress_bar() {
   printf "] ${percentage}%%${NC}"
 }
 
+self_update() {
+  step "Checking for updates..."
+
+  local script_path
+  script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local repo_dir
+  repo_dir="$(dirname "${script_path}")"
+
+  if [[ ! -d "${repo_dir}/.git" ]]; then
+    info "Not a git clone. Skipping self-update."
+    info "To get the latest version, re-run the install command."
+    return 0
+  fi
+
+  pushd "${repo_dir}" > /dev/null 2>&1 || return 0
+
+  local current_commit
+  current_commit=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+  local remote_url
+  remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+
+  if [[ -z "${current_commit}" || -z "${remote_url}" ]]; then
+    popd > /dev/null 2>&1 || true
+    info "No git remote configured. Skipping self-update."
+    return 0
+  fi
+
+  info "Current version: ${current_commit:0:8}"
+
+  git fetch origin > /dev/null 2>&1 || {
+    warn "Failed to fetch updates. Check network connection."
+    popd > /dev/null 2>&1 || true
+    return 0
+  }
+
+  local latest_commit
+  latest_commit=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null || echo "")
+
+  if [[ -z "${latest_commit}" ]]; then
+    popd > /dev/null 2>&1 || true
+    info "Could not determine latest version. Skipping self-update."
+    return 0
+  fi
+
+  info "Latest version:  ${latest_commit:0:8}"
+
+  if [[ "${current_commit}" == "${latest_commit}" ]]; then
+    info "Already on the latest version."
+    popd > /dev/null 2>&1 || true
+    return 0
+  fi
+
+  echo ""
+  warn "A new version is available!"
+  info "Updating from ${current_commit:0:8} to ${latest_commit:0:8}..."
+
+  git stash > /dev/null 2>&1 || true
+
+  if ! git pull --rebase origin > /dev/null 2>&1; then
+    warn "Auto-update failed. Please manually run: git pull"
+    git stash pop > /dev/null 2>&1 || true
+    popd > /dev/null 2>&1 || true
+    return 0
+  fi
+
+  git stash pop > /dev/null 2>&1 || true
+
+  info "Updated to latest version: $(git rev-parse HEAD 2>/dev/null | cut -c1-8)"
+
+  popd > /dev/null 2>&1 || true
+
+  echo ""
+  info "Re-running deploy script with latest version..."
+  echo ""
+
+  exec bash "${script_path}/deploy.sh" "$@"
+}
+
 init_logging() {
   mkdir -p "${LOG_DIR}"
   {
@@ -339,6 +418,7 @@ ${YELLOW}Options:${NC}
   --dry-run     Show what would be deployed
   --skip-docker Skip Docker installation check
   --skip-hw-check Skip hardware validation
+  --no-self-update Skip automatic self-update check
   --help        Show this help
 
 ${YELLOW}Environment Variables:${NC}
@@ -371,6 +451,7 @@ main() {
   DRY_RUN=false
   SKIP_DOCKER=false
   SKIP_HW_CHECK=false
+  NO_SELF_UPDATE=false
 
   # Parse arguments
   while [[ $# -gt 0 ]]; do
@@ -395,6 +476,10 @@ main() {
         SKIP_HW_CHECK=true
         shift
         ;;
+      --no-self-update)
+        NO_SELF_UPDATE=true
+        shift
+        ;;
       --help|-h)
         show_usage
         ;;
@@ -407,6 +492,10 @@ main() {
   # Validate required inputs
   [[ -z "${PROFILE}" ]] && fail "Profile is required. Use --help for options."
   validate_profile "${PROFILE}"
+
+  if [[ "${NO_SELF_UPDATE}" != true ]]; then
+    self_update "$@"
+  fi
 
   # Initialize logging
   init_logging
