@@ -9,6 +9,7 @@ set -o nounset
 set -o errtrace
 
 MINIRACK_K3S_VERSION="v1.28.0+k3s1"
+# shellcheck disable=SC2034
 MINIRACK_K3S_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MINIRACK_INSTALL_DIR="${MINIRACK_INSTALL_DIR:-/var/lib/rancher/minirack8}"
 

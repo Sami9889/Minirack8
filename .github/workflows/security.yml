@@ -100,9 +100,19 @@ jobs:
         run: |
           cd minirack8-blueprints
           
-          # Install Docker Compose
+          # Install Docker and Docker Compose
           sudo apt-get update -qq
-          sudo apt-get install -y -qq docker-compose-plugin
+          sudo apt-get install -y -qq docker.io docker-compose-plugin
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          
+          # Wait for Docker to be ready
+          for i in $(seq 1 30); do
+            if docker info > /dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
           
           # Validate compose files
           docker compose --profile homelab config > /dev/null

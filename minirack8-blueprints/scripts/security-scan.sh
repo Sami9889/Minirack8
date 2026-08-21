@@ -51,6 +51,7 @@ scan_hardcoded_secrets() {
 scan_command_injection() {
   info "Scanning for command injection risks..."
 
+  # shellcheck disable=SC2016
   local patterns=(
     '`[^`]*\$[^`]*`'
     '\$\([^)]*\$[^(]*\)'

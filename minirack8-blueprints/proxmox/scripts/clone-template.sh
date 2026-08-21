@@ -106,7 +106,7 @@ main() {
   fi
 
   info "VM ${NEW_NAME} (VMID: ${NEW_VMID}) provisioned successfully."
-  info "Access via: ssh minirack@$(qm guest get ipconfig ${NEW_VMID} 2>/dev/null || echo '<check-proxmox-console>')"
+  info "Access via: ssh minirack@$(qm guest get ipconfig "${NEW_VMID}" 2>/dev/null || echo '<check-proxmox-console>')"
 }
 
 main "$@"

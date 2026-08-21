@@ -79,7 +79,7 @@ backup_k3s() {
 cleanup_old_backups() {
   info "Cleaning up backups older than ${RETENTION_DAYS} days..."
 
-  find "${BACKUP_DIR}" -type f -mtime +${RETENTION_DAYS} -delete 2>/dev/null || true
+  find "${BACKUP_DIR}" -type f -mtime +"${RETENTION_DAYS}" -delete 2>/dev/null || true
   find "${BACKUP_DIR}" -type d -empty -delete 2>/dev/null || true
 
   info "Old backups cleaned up."
