@@ -6,6 +6,17 @@ set -euo pipefail
 set -o nounset
 set -o errtrace
 
+# =============================================================================
+# Pipe/bootstrap detection
+# =============================================================================
+
+if [[ -z "${BASH_SOURCE[0]:-}" || ! -f "${BASH_SOURCE[0]}" ]]; then
+  tmp_script="$(mktemp /tmp/minirack8-docker.XXXXXX.sh)"
+  cat > "${tmp_script}"
+  chmod +x "${tmp_script}"
+  exec bash "${tmp_script}" "$@"
+fi
+
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 MINIRACK_COMPOSE_VERSION="v2.23.0"
 MINIRACK_INSTALL_DIR="/opt/minirack8"
