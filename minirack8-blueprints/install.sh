@@ -617,6 +617,119 @@ show_summary() {
   echo "  Backup:      ${MINIRACK_INSTALL_DIR}/scripts/backup.sh"
   echo "  Security:    ${MINIRACK_INSTALL_DIR}/scripts/security-scan.sh"
   echo ""
+
+  if [[ "${profile}" != k3s-server && "${profile}" != k3s-agent && "${profile}" != k3s-cluster ]]; then
+    show_deployment_dashboard
+  fi
+}
+
+show_deployment_dashboard() {
+  echo -e "\n${CYAN}${BOLD}"
+  cat << 'EOF'
+╔══════════════════════════════════════════════════════════════╗
+║                   MINIRACK8 LIVE DASHBOARD                  ║
+╚══════════════════════════════════════════════════════════════╝
+EOF
+  echo -e "${NC}"
+
+  step "Scanning running containers..."
+
+  local containers
+  containers=$(docker ps --format "{{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true)
+
+  if [[ -z "${containers}" ]]; then
+    warn "No running containers found."
+    return 0
+  fi
+
+  echo ""
+  printf "${BOLD}%-25s %-20s %-35s${NC}\n" "SERVICE" "STATUS" "PORTS"
+  echo -e "${DIM}$(printf '%.0s─' {1..82})${NC}"
+
+  local primary_ip
+  primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+
+  while IFS=$'\t' read -r name status ports; do
+    local status_color="${GREEN}"
+    if [[ "${status}" == *"unhealthy"* ]]; then
+      status_color="${RED}"
+    elif [[ "${status}" == *"starting"* ]]; then
+      status_color="${YELLOW}"
+    fi
+
+    printf "%-25s ${status_color}%-20s${NC} %-35s\n" "${name}" "${status}" "${ports}"
+  done <<< "${containers}"
+
+  echo ""
+  step "Detecting service endpoints..."
+
+  echo -e "\n${BOLD}${CYAN}  Quick Access URLs:${NC}"
+  echo -e "${DIM}  ──────────────────────────────────────────────────────${NC}"
+
+  local service_map=(
+    "plex:32400:Plex Media Server"
+    "jellyfin:8096:Jellyfin Media"
+    "transmission:9091:Transmission"
+    "sabnzbd:8080:SABnzbd"
+    "gitea:3000:Gitea Git"
+    "drone:8081:Drone CI"
+    "code-server:8443:code-server"
+    "pihole:8082:Pi-hole Admin"
+    "nextcloud:8083:Nextcloud"
+    "minio:9001:MinIO Console"
+    "grafana:3002:Grafana"
+    "prometheus:9090:Prometheus"
+    "influxdb:8086:InfluxDB"
+    "portainer:9443:Portainer"
+  )
+
+  local found_any=false
+  for service_info in "${service_map[@]}"; do
+    local service="${service_info%%:*}"
+    local port="${service_info#*:}"
+    port="${port%%:*}"
+    local label="${service_info#*:*:}"
+
+    if docker ps --filter "name=${service}" --format "{{.Names}}" 2>/dev/null | grep -q "${service}"; then
+      echo -e "  ${GREEN}✓${NC} ${label}:${DIM} http://${primary_ip}:${port}${NC}"
+      found_any=true
+    fi
+  done
+
+  if [[ "${found_any}" == false ]]; then
+    echo -e "  ${YELLOW}No web services detected in running containers.${NC}"
+  fi
+
+  echo ""
+  step "Gathering resource metrics..."
+
+  local total_containers
+  total_containers=$(docker ps -q 2>/dev/null | wc -l)
+  echo -e "  ${CYAN}Running containers:${NC} ${total_containers}"
+
+  if command -v free &> /dev/null; then
+    local used_mem total_mem
+    used_mem=$(free -h | awk '/^Mem:/ {print $3}')
+    total_mem=$(free -h | awk '/^Mem:/ {print $2}')
+    echo -e "  ${CYAN}RAM usage:${NC} ${used_mem} / ${total_mem}"
+  fi
+
+  if command -v df &> /dev/null; then
+    local disk_usage
+    disk_usage=$(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 " used)"}')
+    echo -e "  ${CYAN}Disk usage:${NC} ${disk_usage}"
+  fi
+
+  if command -v nproc &> /dev/null; then
+    local cores
+    cores=$(nproc)
+    echo -e "  ${CYAN}CPU cores:${NC} ${cores}"
+  fi
+
+  echo ""
+  echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+  info "MiniRack8 deployment verified and operational!"
+  echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 }
 
 show_usage() {
