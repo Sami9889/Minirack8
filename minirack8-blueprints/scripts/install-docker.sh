@@ -16,7 +16,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+# shellcheck disable=SC2034
 MAGENTA='\033[0;35m'
+# shellcheck disable=SC2034
 BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
@@ -31,9 +33,11 @@ divider() { echo -e "${DIM}─────────────────�
 animate_spinner() {
   local pid=$1
   local delay=0.1
+  # shellcheck disable=SC1003
   local spinstr='|/-\'
   while kill -0 "${pid}" 2>/dev/null; do
     for char in ${spinstr}; do
+      # shellcheck disable=SC2059
       printf "${CYAN}%c${NC}" "${char}"
       sleep "${delay}"
       printf "\b"
@@ -49,6 +53,7 @@ progress_bar() {
   local completed=$((width * current / total))
   local remaining=$((width - completed))
 
+  # shellcheck disable=SC2059
   printf "\r${CYAN}["
   printf "%${completed}s" | tr ' ' '█'
   printf "%${remaining}s" | tr ' ' '░'
