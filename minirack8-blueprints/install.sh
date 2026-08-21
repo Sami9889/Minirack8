@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # MiniRack8 Enterprise Provisioner
-# Provision Docker, K3s, and Proxmox resources for MiniRack8
+# Production-ready deployment for Docker, K3s, and Proxmox
 # =============================================================================
 
 set -euo pipefail
@@ -12,30 +12,70 @@ MINIRACK_INSTALL_DIR="/opt/minirack8"
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 MINIRACK_COMPOSE_VERSION="v2.23.0"
 
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
+
+# =============================================================================
+# UI Helpers
+# =============================================================================
 
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 fail() { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
 step() { echo -e "\n${BLUE}[STEP]${NC} $*"; }
+success() { echo -e "${GREEN}✓${NC} $*"; }
+divider() { echo -e "${DIM}──────────────────────────────────────────────────────────────${NC}"; }
 
-# =============================================================================
-# Banner
-# =============================================================================
+animate_spinner() {
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
+  while kill -0 "${pid}" 2>/dev/null; do
+    for char in ${spinstr}; do
+      printf "${CYAN}%c${NC}" "${char}"
+      sleep "${delay}"
+      printf "\b"
+    done
+  done
+}
+
+progress_bar() {
+  local current=$1
+  local total=$2
+  local width=40
+  local percentage=$((current * 100 / total))
+  local completed=$((width * current / total))
+  local remaining=$((width - completed))
+
+  printf "\r${CYAN}["
+  printf "%${completed}s" | tr ' ' '█'
+  printf "%${remaining}s" | tr ' ' '░'
+  printf "] ${percentage}%%${NC}"
+}
 
 show_banner() {
+  clear
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
 ║   MiniRack8 Enterprise Provisioner                          ║
-║   Provision Docker, K3s, and Proxmox Resources              ║
+║   Production-Ready Deployment Automation                    ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
+  echo ""
+  echo -e "  ${DIM}Deploy Docker, K3s, and Proxmox resources${NC}"
+  echo ""
+  divider
+  echo ""
 }
 
 # =============================================================================
