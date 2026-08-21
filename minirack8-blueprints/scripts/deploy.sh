@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# =============================================================================
 # MiniRack8 Blueprint Deploy Script
 # Production-ready deployment automation
-# =============================================================================
 
 set -euo pipefail
 set -o nounset
@@ -23,10 +21,6 @@ MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
-
-# =============================================================================
-# UI Helpers
-# =============================================================================
 
 info() { echo -e "${GREEN}[INFO]${NC} $*" | tee -a "${AUDIT_LOG}"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*" | tee -a "${AUDIT_LOG}"; }
@@ -89,61 +83,6 @@ EOF
   echo ""
 }
 
-# =============================================================================
-# Usage
-# =============================================================================
-
-show_usage() {
-  cat << EOF
-${GREEN}MiniRack8 Blueprint Deploy Script${NC}
-
-${YELLOW}Usage:${NC} $0 --profile <profile> [options]
-
-${YELLOW}Profiles:${NC}
-  homelab       Media, downloads, monitoring (4GB RAM)
-  dev           Git, CI/CD, code-server (6GB RAM)
-  networking    Pi-hole, WireGuard (2GB RAM)
-  storage       Nextcloud, MinIO (4GB RAM)
-  monitoring    Grafana, Prometheus, InfluxDB (2GB RAM)
-  full          All services (16GB RAM)
-  k3s-server    Install K3s single-node server
-  k3s-agent     Install K3s agent (requires --server-ip)
-  k3s-cluster   Bootstrap multi-node K3s cluster
-
-${YELLOW}Options:${NC}
-  --profile     Profile to deploy (required)
-  --server-ip   K3s server IP (for k3s-agent)
-  --dry-run     Show what would be deployed
-  --skip-docker Skip Docker installation check
-  --skip-hw-check Skip hardware validation
-  --help        Show this help
-
-${YELLOW}Environment Variables:${NC}
-  PIHOLE_WEBPASSWORD    Pi-hole admin password
-  MYSQL_PASSWORD        Nextcloud/MariaDB password
-  MYSQL_ROOT_PASSWORD   MariaDB root password
-  MINIO_ROOT_USER       MinIO root username
-  MINIO_ROOT_PASSWORD   MinIO root password
-  INFLUXDB_PASSWORD     InfluxDB admin password
-  DRONE_GITEA_CLIENT_ID       Drone OAuth client ID
-  DRONE_GITEA_CLIENT_SECRET   Drone OAuth client secret
-  DRONE_RPC_SECRET            Drone RPC secret
-  DRONE_SERVER_HOST           Drone server hostname
-  DRONE_SERVER_PROTO          Drone server protocol (http/https)
-
-${YELLOW}Examples:${NC}
-  $0 --profile homelab
-  $0 --profile full
-  $0 --profile k3s-server
-  $0 --profile k3s-agent --server-ip 192.168.1.10
-EOF
-  exit 0
-}
-
-# =============================================================================
-# Validation Functions
-# =============================================================================
-
 validate_profile() {
   local profile="${1:?profile required}"
   local valid_profiles=(
@@ -180,10 +119,6 @@ validate_port() {
     fail "Invalid port number: ${port}. Must be 1-65535."
   fi
 }
-
-# =============================================================================
-# Hardware Checks
-# =============================================================================
 
 check_os() {
   step "Checking operating system..."
@@ -246,10 +181,6 @@ check_hardware() {
   fi
 }
 
-# =============================================================================
-# Docker Installation
-# =============================================================================
-
 install_docker() {
   step "Checking Docker installation..."
 
@@ -296,10 +227,6 @@ check_docker_compose() {
     fail "Docker Compose not found. Please install Docker Compose plugin."
   fi
 }
-
-# =============================================================================
-# Deployment Functions
-# =============================================================================
 
 deploy_docker() {
   local profile="${1:?profile required}"
@@ -383,9 +310,52 @@ deploy_k3s_cluster() {
   info "K3s cluster deployed."
 }
 
-# =============================================================================
-# Main
-# =============================================================================
+show_usage() {
+  cat << EOF
+${GREEN}MiniRack8 Blueprint Deploy Script${NC}
+
+${YELLOW}Usage:${NC} $0 --profile <profile> [options]
+
+${YELLOW}Profiles:${NC}
+  homelab       Media, downloads, monitoring (4GB RAM)
+  dev           Git, CI/CD, code-server (6GB RAM)
+  networking    Pi-hole, WireGuard (2GB RAM)
+  storage       Nextcloud, MinIO (4GB RAM)
+  monitoring    Grafana, Prometheus, InfluxDB (2GB RAM)
+  full          All services (16GB RAM)
+  k3s-server    Install K3s single-node server
+  k3s-agent     Install K3s agent (requires --server-ip)
+  k3s-cluster   Bootstrap multi-node K3s cluster
+
+${YELLOW}Options:${NC}
+  --profile     Profile to deploy (required)
+  --server-ip   K3s server IP (for k3s-agent)
+  --dry-run     Show what would be deployed
+  --skip-docker Skip Docker installation check
+  --skip-hw-check Skip hardware validation
+  --help        Show this help
+
+${YELLOW}Environment Variables:${NC}
+  PIHOLE_WEBPASSWORD    Pi-hole admin password
+  MYSQL_PASSWORD        Nextcloud/MariaDB password
+  MYSQL_ROOT_PASSWORD   MariaDB root password
+  MINIO_ROOT_USER       MinIO root username
+  MINIO_ROOT_PASSWORD   MinIO root password
+  INFLUXDB_PASSWORD     InfluxDB admin password
+  DRONE_GITEA_CLIENT_ID       Drone OAuth client ID
+  DRONE_GITEA_CLIENT_SECRET   Drone OAuth client secret
+  DRONE_RPC_SECRET            Drone RPC secret
+  DRONE_SERVER_HOST           Drone server hostname
+  DRONE_SERVER_PROTO          Drone server protocol (http/https)
+
+${YELLOW}Examples:${NC}
+  $0 --profile homelab
+  $0 --profile full
+  $0 --profile k3s-server
+  $0 --profile k3s-agent --server-ip 192.168.1.10
+EOF
+  exit 0
+}
 
 main() {
   show_banner
