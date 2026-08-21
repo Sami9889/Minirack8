@@ -17,14 +17,22 @@ Permanent, production-ready blueprints for the MiniRack8.
 
 ### One-Command Install
 
+Run this entire command as a single line. It downloads `install.sh` and pipes it directly to `bash` for execution:
+
+\`\`\`bash
 curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
+\`\`\`
+
+> **Note:** Do not run `curl` by itself. The `| sudo bash -s --` part is required to execute the script.
 
 ### Manual Installation
 
+\`\`\`bash
 git clone https://github.com/Sami9889/Minirack8.git
 cd minirack8-blueprints
 
 sudo bash install.sh --profile homelab
+\`\`\`
 
 ## Security Features
 
