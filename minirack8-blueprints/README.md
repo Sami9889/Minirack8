@@ -3,6 +3,13 @@
 
 ### One-Command Install
 
+Run this entire command as a single line. It downloads `install.sh` and pipes it directly to `bash` for execution:
+
+\`\`\`bash
+curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
+\`\`\`
+
+> **Note:** Do not run `curl` by itself. The `| sudo bash -s --` part is required to execute the script.
 ```bash
 # Install Docker and deploy a profile in one step
 # PCI-DSS inspired security: cryptographically secure passwords generated automatically
@@ -12,16 +19,14 @@ curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-b
 
 ### Manual Installation
 
-```bash
-# 1. Clone the repository
+\`\`\`bash
 git clone https://github.com/Sami9889/Minirack8.git
-cd blueprints
+cd minirack8-blueprints
 
-# 2. Run installer
 sudo bash install.sh --profile homelab
-```
+\`\`\`
 
-### Security Features
+## Security Features
 
 - Cryptographically secure passwords using `/dev/urandom`
 - Password strength validation (16+ chars, mixed case, numbers, symbols)
@@ -44,16 +49,11 @@ sudo bash install.sh --profile homelab
 
 ## K3s Clusters
 
-```bash
-# Single node
 sudo bash install.sh --profile k3s-server
 
-# Multi node
 sudo bash install.sh --profile k3s-cluster
 
-# Agent node
 sudo bash install.sh --profile k3s-agent --server-ip 192.168.1.10
-```
 
 ## Proxmox Templates
 

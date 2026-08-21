@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
-# =============================================================================
 # MiniRack8 Docker Installer
 # Production-ready Docker CE installation
-# =============================================================================
 
 set -euo pipefail
 set -o nounset
 set -o errtrace
+
+# =============================================================================
+# Pipe/bootstrap detection
+# =============================================================================
+
+if [[ -z "${BASH_SOURCE[0]:-}" || ! -f "${BASH_SOURCE[0]}" ]]; then
+  tmp_script="$(mktemp /tmp/minirack8-docker.XXXXXX.sh)"
+  cat > "${tmp_script}"
+  chmod +x "${tmp_script}"
+  exec bash "${tmp_script}" "$@"
+fi
 
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 MINIRACK_COMPOSE_VERSION="v2.23.0"
@@ -18,14 +27,12 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+# shellcheck disable=SC2034
 MAGENTA='\033[0;35m'
+# shellcheck disable=SC2034
 BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
-
-# =============================================================================
-# UI Helpers
-# =============================================================================
 
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
@@ -37,9 +44,11 @@ divider() { echo -e "${DIM}─────────────────�
 animate_spinner() {
   local pid=$1
   local delay=0.1
+  # shellcheck disable=SC1003
   local spinstr='|/-\'
   while kill -0 "${pid}" 2>/dev/null; do
     for char in ${spinstr}; do
+      # shellcheck disable=SC2059
       printf "${CYAN}%c${NC}" "${char}"
       sleep "${delay}"
       printf "\b"
@@ -55,10 +64,90 @@ progress_bar() {
   local completed=$((width * current / total))
   local remaining=$((width - completed))
 
+  # shellcheck disable=SC2059
   printf "\r${CYAN}["
   printf "%${completed}s" | tr ' ' '█'
   printf "%${remaining}s" | tr ' ' '░'
   printf "] ${percentage}%%${NC}"
+}
+
+self_update() {
+  step "Checking for updates..."
+
+  local script_path
+  script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local repo_dir
+  repo_dir="$(dirname "${script_path}")"
+
+  if [[ ! -d "${repo_dir}/.git" ]]; then
+    info "Not a git clone. Skipping self-update."
+    info "To get the latest version, re-run the install command."
+    return 0
+  fi
+
+  pushd "${repo_dir}" > /dev/null 2>&1 || return 0
+
+  local current_commit
+  current_commit=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+  local remote_url
+  remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+
+  if [[ -z "${current_commit}" || -z "${remote_url}" ]]; then
+    popd > /dev/null 2>&1 || true
+    info "No git remote configured. Skipping self-update."
+    return 0
+  fi
+
+  info "Current version: ${current_commit:0:8}"
+
+  git fetch origin > /dev/null 2>&1 || {
+    warn "Failed to fetch updates. Check network connection."
+    popd > /dev/null 2>&1 || true
+    return 0
+  }
+
+  local latest_commit
+  latest_commit=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null || echo "")
+
+  if [[ -z "${latest_commit}" ]]; then
+    popd > /dev/null 2>&1 || true
+    info "Could not determine latest version. Skipping self-update."
+    return 0
+  fi
+
+  info "Latest version:  ${latest_commit:0:8}"
+
+  if [[ "${current_commit}" == "${latest_commit}" ]]; then
+    info "Already on the latest version."
+    popd > /dev/null 2>&1 || true
+    return 0
+  fi
+
+  echo ""
+  warn "A new version is available!"
+  info "Updating from ${current_commit:0:8} to ${latest_commit:0:8}..."
+
+  git stash > /dev/null 2>&1 || true
+
+  if ! git pull --rebase origin > /dev/null 2>&1; then
+    warn "Auto-update failed. Please manually run: git pull"
+    git stash pop > /dev/null 2>&1 || true
+    popd > /dev/null 2>&1 || true
+    return 0
+  fi
+
+  git stash pop > /dev/null 2>&1 || true
+
+  info "Updated to latest version: $(git rev-parse HEAD 2>/dev/null | cut -c1-8)"
+
+  popd > /dev/null 2>&1 || true
+
+  echo ""
+  info "Re-running Docker installer with latest version..."
+  echo ""
+
+  exec bash "${script_path}/install-docker.sh" "$@"
 }
 
 show_banner() {
@@ -67,7 +156,6 @@ show_banner() {
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
 ║   MiniRack8 Docker Installer                                ║
-║   Production-Ready Docker CE Installation                   ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
@@ -77,10 +165,6 @@ EOF
   divider
   echo ""
 }
-
-# =============================================================================
-# Validation
-# =============================================================================
 
 check_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -162,10 +246,6 @@ check_hardware() {
   fi
 }
 
-# =============================================================================
-# Pre-installation
-# =============================================================================
-
 uninstall_old_docker() {
   step "Removing old Docker versions..."
 
@@ -224,10 +304,6 @@ setup_docker_repo() {
 
   info "Docker repository configured."
 }
-
-# =============================================================================
-# Docker Installation
-# =============================================================================
 
 install_docker_ce() {
   step "Installing Docker CE..."
@@ -310,10 +386,6 @@ EOF
   info "Docker daemon configured."
 }
 
-# =============================================================================
-# Post-installation
-# =============================================================================
-
 configure_firewall() {
   step "Configuring firewall..."
 
@@ -394,10 +466,6 @@ create_minirack_directories() {
 
   info "MiniRack8 directories created at ${MINIRACK_INSTALL_DIR}"
 }
-
-# =============================================================================
-# Secure Password Generation
-# =============================================================================
 
 generate_password() {
   local length="${1:-32}"
@@ -514,10 +582,6 @@ EOF
   fi
 }
 
-# =============================================================================
-# Verification
-# =============================================================================
-
 verify_installation() {
   step "Verifying Docker installation..."
 
@@ -548,10 +612,6 @@ verify_installation() {
   info "Docker root directory: $(docker info --format '{{.DockerRootDir}}')"
 }
 
-# =============================================================================
-# Summary
-# =============================================================================
-
 show_summary() {
   echo -e "\n${GREEN}═══════════════════════════════════════════════════════════════${NC}"
   info "Docker installation completed successfully!"
@@ -574,11 +634,25 @@ show_summary() {
   echo ""
 }
 
-# =============================================================================
-# Main
-# =============================================================================
-
 main() {
+  NO_SELF_UPDATE=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-self-update)
+        NO_SELF_UPDATE=true
+        shift
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  if [[ "${NO_SELF_UPDATE}" != true ]]; then
+    self_update "$@"
+  fi
+
   show_banner
   check_root
   check_os

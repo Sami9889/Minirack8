@@ -154,7 +154,7 @@ verify_cluster() {
   local server_ip="${1:?server ip required}"
 
   info "Verifying cluster status..."
-  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "root@${server_ip}" << VERIFYEOF
+  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "root@${server_ip}" << 'VERIFYEOF'
 set -euo pipefail
 set -o nounset
 set -o errtrace
