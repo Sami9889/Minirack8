@@ -100,9 +100,25 @@ jobs:
         run: |
           cd minirack8-blueprints/docker-compose
           
-          # Install Docker Compose
+          # Install Docker and Docker Compose from official Docker repository
           sudo apt-get update -qq
-          sudo apt-get install -y -qq docker-compose-plugin
+          sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
+          
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+          
+          # Start Docker daemon manually
+          sudo dockerd --host=unix:///var/run/docker.sock --storage-driver=overlay2 > /tmp/dockerd.log 2>&1 &
+          for i in $(seq 1 30); do
+            if docker info > /dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
           
           # Validate compose files from the correct directory
           docker compose --profile homelab config > /dev/null
