@@ -98,7 +98,7 @@ jobs:
 
       - name: Validate Docker Compose files
         run: |
-          cd minirack8-blueprints
+          cd minirack8-blueprints/docker-compose
           
           # Install Docker and Docker Compose
           sudo apt-get update -qq
@@ -121,7 +121,7 @@ jobs:
             sleep 2
           done
           
-          # Validate compose files
+          # Validate compose files from the correct directory
           docker compose --profile homelab config > /dev/null
           docker compose --profile dev config > /dev/null
           docker compose --profile networking config > /dev/null
