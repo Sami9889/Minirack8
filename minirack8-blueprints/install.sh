@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# =============================================================================
 # MiniRack8 Enterprise Provisioner
 # Production-ready deployment for Docker, K3s, and Proxmox
-# =============================================================================
 
 set -euo pipefail
 set -o nounset
@@ -77,10 +75,6 @@ EOF
   divider
   echo ""
 }
-
-# =============================================================================
-# Validation
-# =============================================================================
 
 check_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -203,10 +197,6 @@ validate_ip() {
   done
 }
 
-# =============================================================================
-# Docker Installation
-# =============================================================================
-
 install_docker() {
   step "Checking Docker installation..."
 
@@ -284,10 +274,6 @@ EOF
 
   info "Docker installed and configured."
 }
-
-# =============================================================================
-# Secure Password Generation & Input (PCI-DSS Inspired)
-# =============================================================================
 
 generate_password() {
   local length="${1:-32}"
@@ -504,10 +490,6 @@ EOF
   warn "SECURITY: Never share .env file or commit to version control!"
 }
 
-# =============================================================================
-# Blueprint Deployment
-# =============================================================================
-
 setup_blueprints() {
   step "Setting up MiniRack8 blueprints..."
 
@@ -575,10 +557,6 @@ deploy_profile() {
   info "Profile '${profile}' deployed successfully."
 }
 
-# =============================================================================
-# Summary
-# =============================================================================
-
 show_summary() {
   local profile="${1:?profile required}"
   echo -e "\n${GREEN}═══════════════════════════════════════════════════════════════${NC}"
@@ -640,10 +618,6 @@ show_summary() {
   echo "  Security:    ${MINIRACK_INSTALL_DIR}/scripts/security-scan.sh"
   echo ""
 }
-
-# =============================================================================
-# Main
-# =============================================================================
 
 show_usage() {
   cat << EOF
