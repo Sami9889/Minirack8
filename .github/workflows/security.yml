@@ -111,10 +111,9 @@ jobs:
           
           sudo apt-get update -qq
           sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
-          sudo systemctl start docker
-          sudo systemctl enable docker
           
-          # Wait for Docker to be ready
+          # Start Docker daemon manually (systemd may not be available in CI)
+          sudo dockerd --host=unix:///var/run/docker.sock --storage-driver=overlay2 > /tmp/dockerd.log 2>&1 &
           for i in $(seq 1 30); do
             if docker info > /dev/null 2>&1; then
               break
