@@ -539,11 +539,13 @@ main() {
   echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 
   if [[ "${PROFILE}" != k3s-server && "${PROFILE}" != k3s-agent && "${PROFILE}" != k3s-cluster ]]; then
-    show_deployment_dashboard
+    show_deployment_dashboard "${PROFILE}"
   fi
 }
 
 show_deployment_dashboard() {
+  local profile="${1:-}"
+  local compose_dir="${REPO_DIR}/docker-compose"
   echo -e "\n${CYAN}${BOLD}"
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
@@ -566,8 +568,16 @@ EOF
   # shellcheck disable=SC2059
   printf "\r  ${GREEN}Scan complete. Found:${NC}\n"
 
-  local containers
-  containers=$(docker ps --format "{{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true)
+  local containers=""
+  if [[ -n "${profile}" && -d "${compose_dir}" ]]; then
+    if containers=$(cd "${compose_dir}" && docker compose --profile "${profile}" ps --format "{{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null); then
+      :
+    fi
+  fi
+
+  if [[ -z "${containers}" ]]; then
+    containers=$(docker ps --format "{{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true)
+  fi
 
   if [[ -z "${containers}" ]]; then
     warn "No running containers found."
@@ -581,7 +591,10 @@ EOF
   local primary_ip
   primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
+  local total=0
+  local healthy=0
   while IFS=$'\t' read -r name status ports; do
+    ((total++))
     local status_color="${GREEN}"
     if [[ "${status,,}" == *"unhealthy"* ]]; then
       status_color="${RED}"
@@ -589,6 +602,8 @@ EOF
       status_color="${YELLOW}"
     elif [[ "${status,,}" == *"restarting"* ]]; then
       status_color="${RED}"
+    else
+      ((healthy++))
     fi
 
     local display_ports="${ports}"
@@ -611,8 +626,17 @@ EOF
     host_ports=$(echo "${ports}" | grep -oE ':[0-9]+->' | sed 's/://g; s/->//g' | tr '\n' ' ')
     [[ -z "${host_ports}" ]] && continue
 
+    local protocol
+    protocol=$(get_service_protocol "${name}")
+
     for port in ${host_ports}; do
-      echo -e "  ${GREEN}✓${NC} ${name}:${DIM} http://${primary_ip}:${port}${NC}"
+      if [[ "${protocol}" == "udp" ]]; then
+        echo -e "  ${GREEN}✓${NC} ${name}:${DIM} udp://${primary_ip}:${port}${NC}"
+      elif [[ "${protocol}" == "https" ]]; then
+        echo -e "  ${GREEN}✓${NC} ${name}:${DIM} https://${primary_ip}:${port}${NC}"
+      else
+        echo -e "  ${GREEN}✓${NC} ${name}:${DIM} http://${primary_ip}:${port}${NC}"
+      fi
       found_any=true
     done
   done <<< "${containers}"
@@ -648,9 +672,24 @@ EOF
   fi
 
   echo ""
-  echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-  info "MiniRack8 deployment verified and operational!"
-  echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+  if [[ ${total} -gt 0 && ${healthy} -eq ${total} ]]; then
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    info "MiniRack8 deployment verified and operational!"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+  else
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+    info "MiniRack8 deployment pending (${healthy}/${total} containers ready)."
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+  fi
+}
+
+get_service_protocol() {
+  local name="${1,,}"
+  case "${name}" in
+    *wireguard*|*wg*) echo "udp" ;;
+    *code-server*) echo "https" ;;
+    *) echo "http" ;;
+  esac
 }
 
 main "$@"
