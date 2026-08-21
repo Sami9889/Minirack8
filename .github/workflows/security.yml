@@ -5,10 +5,12 @@ on:
     branches: [ main, master ]
     paths:
       - 'minirack8-blueprints/**'
+      - '.github/workflows/**'
   push:
     branches: [ main, master ]
     paths:
       - 'minirack8-blueprints/**'
+      - '.github/workflows/**'
 
 jobs:
   security-scan:
