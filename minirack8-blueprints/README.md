@@ -1,17 +1,3 @@
-# MiniRack8 Blueprints
-
-Permanent, production-ready blueprints for the MiniRack8.
-
-## Hardware Reference
-
-| Spec | Detail |
-|------|--------|
-| Form Factor | 10-inch rack, 8U |
-| CPU | Intel i5-13500T (14 cores, 4.6GHz) |
-| RAM | 16GB DDR4 |
-| Storage | 256GB SSD (renewed Dell OptiPlex 7010) |
-| Network | 12-port patch panel + managed switch |
-| Power | 8-outlet PDU (125V/15A) |
 
 ## Quick Start
 
@@ -24,6 +10,12 @@ curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-b
 \`\`\`
 
 > **Note:** Do not run `curl` by itself. The `| sudo bash -s --` part is required to execute the script.
+```bash
+# Install Docker and deploy a profile in one step
+# PCI-DSS inspired security: cryptographically secure passwords generated automatically
+# Use --skip-os-check to bypass OS validation on non-standard Linux distributions
+curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
+```
 
 ### Manual Installation
 
