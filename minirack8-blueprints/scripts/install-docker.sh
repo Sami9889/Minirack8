@@ -145,7 +145,6 @@ show_banner() {
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
 ║   MiniRack8 Docker Installer                                ║
-║   Production-Ready Docker CE Installation                   ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF

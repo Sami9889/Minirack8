@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-b
 ### Manual Installation
 
 git clone https://github.com/Sami9889/Minirack8.git
-cd blueprints
+cd minirack8-blueprints
 
 sudo bash install.sh --profile homelab
 
