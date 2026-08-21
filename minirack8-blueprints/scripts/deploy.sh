@@ -459,6 +459,15 @@ EOF
 
   step "Scanning running containers..."
 
+  # Animated scanning effect
+  local spinstr='|/-\'
+  local i=0
+  for _ in $(seq 1 18); do
+    printf "\r  ${CYAN}Scanning... %c${NC}" "${spinstr:i++%${#spinstr}:1}"
+    sleep 0.05
+  done
+  printf "\r  ${GREEN}Scan complete. Found:${NC}\n"
+
   local containers
   containers=$(docker ps --format "{{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true)
 
@@ -468,65 +477,54 @@ EOF
   fi
 
   echo ""
-  printf "${BOLD}%-25s %-20s %-35s${NC}\n" "SERVICE" "STATUS" "PORTS"
-  echo -e "${DIM}$(printf '%.0s─' {1..82})${NC}"
+  printf "${BOLD}%-28s %-22s %s${NC}\n" "SERVICE" "STATUS" "PORTS"
+  echo -e "${DIM}$(printf '%.0s─' {1..90})${NC}"
 
   local primary_ip
   primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
   while IFS=$'\t' read -r name status ports; do
     local status_color="${GREEN}"
-    if [[ "${status}" == *"unhealthy"* ]]; then
+    if [[ "${status,,}" == *"unhealthy"* ]]; then
       status_color="${RED}"
-    elif [[ "${status}" == *"starting"* ]]; then
+    elif [[ "${status,,}" == *"starting"* ]]; then
       status_color="${YELLOW}"
+    elif [[ "${status,,}" == *"restarting"* ]]; then
+      status_color="${RED}"
     fi
 
-    printf "%-25s ${status_color}%-20s${NC} %-35s\n" "${name}" "${status}" "${ports}"
+    local display_ports="${ports}"
+    [[ ${#display_ports} -gt 45 ]] && display_ports="${display_ports:0:42}..."
+
+    printf "%-28s ${status_color}%-22s${NC} %s\n" "${name}" "${status}" "${display_ports}"
   done <<< "${containers}"
 
   echo ""
   step "Detecting service endpoints..."
 
   echo -e "\n${BOLD}${CYAN}  Quick Access URLs:${NC}"
-  echo -e "${DIM}  ──────────────────────────────────────────────────────${NC}"
-
-  local service_map=(
-    "plex:32400:Plex Media Server"
-    "jellyfin:8096:Jellyfin Media"
-    "transmission:9091:Transmission"
-    "sabnzbd:8080:SABnzbd"
-    "gitea:3000:Gitea Git"
-    "drone:8081:Drone CI"
-    "code-server:8443:code-server"
-    "pihole:8082:Pi-hole Admin"
-    "nextcloud:8083:Nextcloud"
-    "minio:9001:MinIO Console"
-    "grafana:3002:Grafana"
-    "prometheus:9090:Prometheus"
-    "influxdb:8086:InfluxDB"
-    "portainer:9443:Portainer"
-  )
+  echo -e "${DIM}  ─────────────────────────────────────────────────────────────${NC}"
 
   local found_any=false
-  for service_info in "${service_map[@]}"; do
-    local service="${service_info%%:*}"
-    local port="${service_info#*:}"
-    port="${port%%:*}"
-    local label="${service_info#*:*:}"
+  while IFS=$'\t' read -r name status ports; do
+    [[ -z "${ports}" ]] && continue
 
-    if docker ps --filter "name=${service}" --format "{{.Names}}" 2>/dev/null | grep -q "${service}"; then
-      echo -e "  ${GREEN}✓${NC} ${label}:${DIM} http://${primary_ip}:${port}${NC}"
+    local host_ports
+    host_ports=$(echo "${ports}" | grep -oE ':[0-9]+->' | sed 's/://g; s/->//g' | tr '\n' ' ')
+    [[ -z "${host_ports}" ]] && continue
+
+    for port in ${host_ports}; do
+      echo -e "  ${GREEN}✓${NC} ${name}:${DIM} http://${primary_ip}:${port}${NC}"
       found_any=true
-    fi
-  done
+    done
+  done <<< "${containers}"
 
   if [[ "${found_any}" == false ]]; then
-    echo -e "  ${YELLOW}No web services detected in running containers.${NC}"
+    echo -e "  ${YELLOW}No published ports detected.${NC}"
   fi
 
   echo ""
-  step "Gathering resource metrics..."
+  step "Resource overview..."
 
   local total_containers
   total_containers=$(docker ps -q 2>/dev/null | wc -l)
