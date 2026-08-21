@@ -7,7 +7,9 @@ set -o nounset
 set -o errtrace
 
 MINIRACK_INSTALL_DIR="/opt/minirack8"
+# shellcheck disable=SC2034
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
+# shellcheck disable=SC2034
 MINIRACK_COMPOSE_VERSION="v2.23.0"
 
 # Colors
@@ -16,7 +18,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+# shellcheck disable=SC2034
 MAGENTA='\033[0;35m'
+# shellcheck disable=SC2034
 BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
@@ -35,6 +39,7 @@ divider() { echo -e "${DIM}─────────────────�
 animate_spinner() {
   local pid=$1
   local delay=0.1
+  # shellcheck disable=SC1003
   local spinstr='|/-\'
   while kill -0 "${pid}" 2>/dev/null; do
     for char in ${spinstr}; do
@@ -53,6 +58,7 @@ progress_bar() {
   local completed=$((width * current / total))
   local remaining=$((width - completed))
 
+  # shellcheck disable=SC2059
   printf "\r${CYAN}["
   printf "%${completed}s" | tr ' ' '█'
   printf "%${remaining}s" | tr ' ' '░'
@@ -635,12 +641,15 @@ EOF
   step "Scanning running containers..."
 
   # Animated scanning effect
+  # shellcheck disable=SC1003
   local spinstr='|/-\'
   local i=0
   for _ in $(seq 1 18); do
+    # shellcheck disable=SC2059
     printf "\r  ${CYAN}Scanning... %c${NC}" "${spinstr:i++%${#spinstr}:1}"
     sleep 0.05
   done
+  # shellcheck disable=SC2059
   printf "\r  ${GREEN}Scan complete. Found:${NC}\n"
 
   local containers
@@ -771,7 +780,6 @@ main() {
   SERVER_IP=""
   SKIP_DOCKER=false
   SKIP_OS_CHECK=false
-  FORCE_MODE=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -792,7 +800,6 @@ main() {
         shift
         ;;
       --force)
-        FORCE_MODE=true
         SKIP_OS_CHECK=true
         SKIP_DOCKER=true
         shift

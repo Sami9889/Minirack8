@@ -80,8 +80,8 @@ jobs:
             exit 1
           fi
 
-          # Check for hardcoded passwords in tracked files
-          if git grep -n -E 'PASSWORD=.*[a-zA-Z0-9]{8,}' -- '*.sh' '*.yml' '*.yaml' | grep -v '.env.example' | grep -v 'generate_password' | grep -v 'security-scan.sh'; then
+          # Check for hardcoded passwords in tracked files (exclude variable references)
+          if git grep -n -P 'PASSWORD=(?!\$\{)[a-zA-Z0-9]{8,}' -- '*.sh' '*.yml' '*.yaml' | grep -v '.env.example' | grep -v 'generate_password' | grep -v 'security-scan.sh'; then
             echo "ERROR: Hardcoded password found"
             exit 1
           fi

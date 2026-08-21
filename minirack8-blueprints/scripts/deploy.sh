@@ -17,6 +17,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+# shellcheck disable=SC2034
 MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 DIM='\033[2m'
@@ -32,6 +33,7 @@ divider() { echo -e "${DIM}─────────────────�
 animate_spinner() {
   local pid=$1
   local delay=0.1
+  # shellcheck disable=SC1003
   local spinstr='|/-\'
   while kill -0 "${pid}" 2>/dev/null; do
     for char in ${spinstr}; do
@@ -50,6 +52,7 @@ progress_bar() {
   local completed=$((width * current / total))
   local remaining=$((width - completed))
 
+  # shellcheck disable=SC2059
   printf "\r${CYAN}["
   printf "%${completed}s" | tr ' ' '█'
   printf "%${remaining}s" | tr ' ' '░'
@@ -58,12 +61,14 @@ progress_bar() {
 
 init_logging() {
   mkdir -p "${LOG_DIR}"
-  echo "=== MiniRack8 Blueprint Deployment ===" >> "${AUDIT_LOG}"
-  echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${AUDIT_LOG}"
-  echo "User: $(whoami)" >> "${AUDIT_LOG}"
-  echo "Host: $(hostname)" >> "${AUDIT_LOG}"
-  echo "Profile: ${PROFILE}" >> "${AUDIT_LOG}"
-  echo "=======================================" >> "${AUDIT_LOG}"
+  {
+    echo "=== MiniRack8 Blueprint Deployment ==="
+    echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "User: $(whoami)"
+    echo "Host: $(hostname)"
+    echo "Profile: ${PROFILE}"
+    echo "======================================="
+  } >> "${AUDIT_LOG}"
 }
 
 show_banner() {
@@ -233,6 +238,7 @@ deploy_docker() {
   step "Deploying Docker Compose profile: ${profile}"
 
   local compose_file="${REPO_DIR}/docker-compose/docker-compose.yml"
+  # shellcheck disable=SC2034
   local profiles_dir="${REPO_DIR}/docker-compose/profiles"
 
   if [[ ! -f "${compose_file}" ]]; then
@@ -460,12 +466,15 @@ EOF
   step "Scanning running containers..."
 
   # Animated scanning effect
+  # shellcheck disable=SC1003
   local spinstr='|/-\'
   local i=0
   for _ in $(seq 1 18); do
+    # shellcheck disable=SC2059
     printf "\r  ${CYAN}Scanning... %c${NC}" "${spinstr:i++%${#spinstr}:1}"
     sleep 0.05
   done
+  # shellcheck disable=SC2059
   printf "\r  ${GREEN}Scan complete. Found:${NC}\n"
 
   local containers
