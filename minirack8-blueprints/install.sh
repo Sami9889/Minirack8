@@ -305,6 +305,32 @@ install_docker() {
 
   info "Docker not found. Installing Docker..."
 
+  if [[ "${OS}" == "alpine" ]]; then
+    apk update
+    apk add --no-cache docker docker-cli docker-compose
+
+    rc-update add docker default || true
+    service docker start || true
+
+    # Wait for Docker to be ready
+    local max_attempts=30
+    local attempt=0
+    while [[ ${attempt} -lt ${max_attempts} ]]; do
+      if docker info &> /dev/null; then
+        break
+      fi
+      attempt=$((attempt + 1))
+      sleep 2
+    done
+
+    if [[ ${attempt} -eq ${max_attempts} ]]; then
+      fail "Docker daemon failed to start."
+    fi
+
+    info "Docker installed and configured."
+    return 0
+  fi
+
   apt-get update -qq
   apt-get install -y -qq ca-certificates curl gnupg lsb-release
 
