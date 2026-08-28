@@ -2,7 +2,7 @@
 
 ## Changes in this branch
 
-- Renamed installer to **MiniRack8 Enterprise Provisioner**
+- Renamed installer to **MiniRack8 Provisioner**
 - Added `--skip-os-check` flag for Alpine, CentOS, RHEL, and other non-Debian/Ubuntu distros
 - Added `--force` flag to skip both OS and Docker installation checks
 - Improved hardware detection output:
