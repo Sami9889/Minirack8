@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MiniRack8 Enterprise Provisioner
+# MiniRack8 Provisioner
 # Production-ready deployment for Docker, K3s, and Proxmox
 
 set -euo pipefail
@@ -162,8 +162,7 @@ show_banner() {
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║   MiniRack8 Enterprise Provisioner                          ║
-║   Production-Ready Deployment Automation                    ║
+║   MiniRack8 Provisioner                                      ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
@@ -957,7 +956,7 @@ EOF
 
 show_usage() {
   cat << EOF
-${GREEN}MiniRack8 Enterprise Provisioner${NC}
+${GREEN}MiniRack8 Provisioner${NC}
 
 ${YELLOW}Usage:${NC} $0 --profile <profile> [options]
 
