@@ -356,17 +356,59 @@ install_docker() {
     return 0
   fi
 
-  apt-get update -qq
-  apt-get install -y -qq ca-certificates curl gnupg lsb-release
+  # Retry apt operations on transient network errors
+  local max_apt_attempts=3
+  local apt_attempt=0
+
+  while [[ ${apt_attempt} -lt ${max_apt_attempts} ]]; do
+    if apt-get update -qq && apt-get install -y -qq ca-certificates curl gnupg lsb-release; then
+      break
+    fi
+    apt_attempt=$((apt_attempt + 1))
+    warn "apt-get failed, retrying (${apt_attempt}/${max_apt_attempts})..."
+    sleep 5
+  done
+
+  if [[ ${apt_attempt} -eq ${max_apt_attempts} ]]; then
+    fail "Failed to install base packages after ${max_apt_attempts} attempts."
+  fi
 
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+  # Retry GPG key download on transient network errors
+  local max_curl_attempts=3
+  local curl_attempt=0
+  while [[ ${curl_attempt} -lt ${max_curl_attempts} ]]; do
+    if curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; then
+      break
+    fi
+    curl_attempt=$((curl_attempt + 1))
+    warn "GPG key download failed, retrying (${curl_attempt}/${max_curl_attempts})..."
+    sleep 5
+  done
+
+  if [[ ${curl_attempt} -eq ${max_curl_attempts} ]]; then
+    fail "Failed to download Docker GPG key after ${max_curl_attempts} attempts."
+  fi
+
   chmod a+r /etc/apt/keyrings/docker.gpg
 
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${OS} $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-  apt-get update -qq
-  apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  # Retry Docker package installation
+  apt_attempt=0
+  while [[ ${apt_attempt} -lt ${max_apt_attempts} ]]; do
+    if apt-get update -qq && apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+      break
+    fi
+    apt_attempt=$((apt_attempt + 1))
+    warn "Docker package install failed, retrying (${apt_attempt}/${max_apt_attempts})..."
+    sleep 5
+  done
+
+  if [[ ${apt_attempt} -eq ${max_apt_attempts} ]]; then
+    fail "Failed to install Docker packages after ${max_apt_attempts} attempts."
+  fi
 
   # Configure Docker daemon
   cat > /etc/docker/daemon.json << 'EOF'
@@ -402,9 +444,15 @@ RestartSec=10
 LimitNOFILE=65536
 EOF
 
-  systemctl daemon-reload
-  systemctl enable --now docker
-  systemctl enable --now containerd
+  # Enable and start Docker if systemd is available
+  if command -v systemctl &> /dev/null; then
+    systemctl daemon-reload
+    systemctl enable --now docker
+    systemctl enable --now containerd
+  else
+    warn "systemctl not found. Starting dockerd directly."
+    nohup dockerd > /var/log/dockerd.log 2>&1 &
+  fi
 
   # Wait for Docker to be ready
   local max_attempts=30
