@@ -6,7 +6,7 @@ set -euo pipefail
 set -o nounset
 set -o errtrace
 
-MINIRACK_INSTALL_DIR="/opt/minirack8"
+MINIRACK_INSTALL_DIR="${MINIRACK_INSTALL_DIR:-/opt/minirack8}"
 # shellcheck disable=SC2034
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 # shellcheck disable=SC2034
