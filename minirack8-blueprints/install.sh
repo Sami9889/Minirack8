@@ -603,6 +603,32 @@ setup_blueprints() {
   local repo_dir
   repo_dir="$(dirname "${script_dir}")"
 
+  # If running from curl/pipe and repo directories are missing, download them
+  if [[ ! -d "${repo_dir}/docker-compose" || ! -d "${repo_dir}/scripts" || ! -d "${repo_dir}/k3s" || ! -d "${repo_dir}/proxmox" ]]; then
+    info "Script running standalone. Downloading MiniRack8 Blueprints..."
+
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    # Download latest release tarball
+    if curl -fsSL "https://github.com/Sami9889/Minirack8/archive/refs/heads/main.tar.gz" -o "${tmp_dir}/minirack8.tar.gz"; then
+      tar -xzf "${tmp_dir}/minirack8.tar.gz" -C "${tmp_dir}"
+
+      # Find the extracted directory
+      local extracted_dir
+      extracted_dir=$(find "${tmp_dir}" -maxdepth 1 -type d -name "Minirack8-*" | head -1)
+
+      if [[ -n "${extracted_dir}" ]]; then
+        repo_dir="${extracted_dir}/minirack8-blueprints"
+        info "Blueprints downloaded to ${repo_dir}"
+      else
+        fail "Failed to extract MiniRack8 repository."
+      fi
+    else
+      fail "Failed to download MiniRack8 repository. Check network connection."
+    fi
+  fi
+
   cp -r "${repo_dir}/docker-compose" "${MINIRACK_INSTALL_DIR}/"
   cp -r "${repo_dir}/scripts" "${MINIRACK_INSTALL_DIR}/"
   cp -r "${repo_dir}/k3s" "${MINIRACK_INSTALL_DIR}/"
