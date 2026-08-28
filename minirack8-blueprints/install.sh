@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MiniRack8 Enterprise Provisioner
+# MiniRack8 Provisioner
 # Production-ready deployment for Docker, K3s, and Proxmox
 
 set -euo pipefail
@@ -162,8 +162,7 @@ show_banner() {
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║   MiniRack8 Enterprise Provisioner                          ║
-║   Production-Ready Deployment Automation                    ║
+║   MiniRack8 Provisioner                                      ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
@@ -294,6 +293,29 @@ validate_ip() {
   done
 }
 
+wait_for_docker() {
+  local max_attempts=30
+  local attempt=0
+  local docker_info_timeout=5
+
+  while [[ ${attempt} -lt ${max_attempts} ]]; do
+    if command -v timeout &> /dev/null; then
+      if timeout "${docker_info_timeout}" docker info &> /dev/null; then
+        return 0
+      fi
+    else
+      if docker info &> /dev/null; then
+        return 0
+      fi
+    fi
+
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  fail "Docker daemon failed to become ready within $((max_attempts * 2)) seconds."
+}
+
 install_docker() {
   step "Checking Docker installation..."
 
@@ -338,19 +360,7 @@ install_docker() {
     fi
 
     # Wait for Docker to be ready
-    local max_attempts=30
-    local attempt=0
-    while [[ ${attempt} -lt ${max_attempts} ]]; do
-      if docker info &> /dev/null; then
-        break
-      fi
-      attempt=$((attempt + 1))
-      sleep 2
-    done
-
-    if [[ ${attempt} -eq ${max_attempts} ]]; then
-      fail "Docker daemon failed to start."
-    fi
+    wait_for_docker
 
     info "Docker installed and configured."
     return 0
@@ -455,19 +465,7 @@ EOF
   fi
 
   # Wait for Docker to be ready
-  local max_attempts=30
-  local attempt=0
-  while [[ ${attempt} -lt ${max_attempts} ]]; do
-    if docker info &> /dev/null; then
-      break
-    fi
-    attempt=$((attempt + 1))
-    sleep 2
-  done
-
-  if [[ ${attempt} -eq ${max_attempts} ]]; then
-    fail "Docker daemon failed to start."
-  fi
+  wait_for_docker
 
   info "Docker installed and configured."
 }
@@ -958,7 +956,7 @@ EOF
 
 show_usage() {
   cat << EOF
-${GREEN}MiniRack8 Enterprise Provisioner${NC}
+${GREEN}MiniRack8 Provisioner${NC}
 
 ${YELLOW}Usage:${NC} $0 --profile <profile> [options]
 
