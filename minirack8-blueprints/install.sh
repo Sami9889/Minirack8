@@ -30,7 +30,7 @@ NC='\033[0m'
 # =============================================================================
 
 if [[ -z "${BASH_SOURCE[0]:-}" || ! -f "${BASH_SOURCE[0]}" ]]; then
-  tmp_script="$(mktemp /tmp/minirack8-install.XXXXXX.sh)"
+  tmp_script="$(mktemp)" || tmp_script="/tmp/minirack8-install.$$.sh"
   cat > "${tmp_script}"
   chmod +x "${tmp_script}"
   exec bash "${tmp_script}" "$@"
@@ -295,18 +295,119 @@ validate_ip() {
   done
 }
 
+wait_for_docker() {
+  local max_attempts=30
+  local attempt=0
+  local docker_info_timeout=5
+  local dockerd_pid="${1:-}"
+
+  while [[ ${attempt} -lt ${max_attempts} ]]; do
+    if [[ -S /var/run/docker.sock ]] && command -v docker &> /dev/null; then
+      if command -v timeout &> /dev/null; then
+        if timeout "${docker_info_timeout}" docker info &> /dev/null; then
+          return 0
+        fi
+      else
+        if docker info &> /dev/null; then
+          return 0
+        fi
+      fi
+    fi
+
+    # If a specific dockerd PID was provided, check if it is still alive
+    if [[ -n "${dockerd_pid}" ]]; then
+      if ! kill -0 "${dockerd_pid}" 2>/dev/null; then
+        fail "Docker daemon process ${dockerd_pid} exited. Check /var/log/dockerd.log for details."
+      fi
+    fi
+
+    # If no PID was provided, fall back to checking for any dockerd process
+    if [[ -z "${dockerd_pid}" ]] && [[ ${attempt} -gt 5 ]]; then
+      if command -v pgrep &> /dev/null && ! pgrep -x dockerd > /dev/null 2>&1; then
+        fail "Docker daemon is not running. Check /var/log/dockerd.log for details."
+      fi
+    fi
+
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  fail "Docker daemon failed to become ready within $((max_attempts * 2)) seconds."
+}
+
 install_docker() {
   step "Checking Docker installation..."
 
   if command -v docker &> /dev/null && docker --version &> /dev/null; then
     info "Docker is already installed: $(docker --version)"
+    if docker info &> /dev/null; then
+      info "Docker daemon is running."
+      return 0
+    else
+      warn "Docker is installed but the daemon is not running. Starting Docker..."
+    fi
+  else
+    info "Docker not found. Installing Docker..."
+  fi
+
+  if [[ "${OS}" == "alpine" ]]; then
+    apk update
+
+    # Retry apk add on transient network errors
+    local max_apk_attempts=3
+    local apk_attempt=0
+    while [[ ${apk_attempt} -lt ${max_apk_attempts} ]]; do
+      if apk add --no-cache docker docker-cli docker-compose coreutils procps; then
+        break
+      fi
+      apk_attempt=$((apk_attempt + 1))
+      warn "apk add failed, retrying (${apk_attempt}/${max_apk_attempts})..."
+      sleep 5
+    done
+
+    if [[ ${apk_attempt} -eq ${max_apk_attempts} ]]; then
+      fail "Failed to install Docker on Alpine after ${max_apk_attempts} attempts."
+    fi
+
+    # Enable and start Docker if init tools are available
+    if command -v rc-update &> /dev/null; then
+      rc-update add docker default || true
+    fi
+
+    if command -v service &> /dev/null; then
+      service docker start || true
+    elif command -v rc-service &> /dev/null; then
+      rc-service docker start || true
+    else
+      warn "OpenRC/service not found. Starting dockerd directly."
+      nohup dockerd > /var/log/dockerd.log 2>&1 &
+      local dockerd_pid=$!
+      info "Started dockerd with PID ${dockerd_pid}"
+    fi
+
+    # Wait for Docker to be ready
+    wait_for_docker "${dockerd_pid:-}"
+
+    info "Docker installed and configured."
     return 0
   fi
 
-  info "Docker not found. Installing Docker..."
+  # Retry apt operations on transient network errors
+  local max_apt_attempts=3
+  local apt_attempt=0
 
-  apt-get update -qq
-  apt-get install -y -qq ca-certificates curl gnupg lsb-release
+  while [[ ${apt_attempt} -lt ${max_apt_attempts} ]]; do
+    if apt-get update -qq && apt-get install -y -qq ca-certificates curl gnupg lsb-release; then
+      break
+    fi
+    apt_attempt=$((apt_attempt + 1))
+    warn "apt-get failed, retrying (${apt_attempt}/${max_apt_attempts})..."
+    sleep 5
+  done
+
+  if [[ ${apt_attempt} -eq ${max_apt_attempts} ]]; then
+    fail "Failed to install base packages after ${max_apt_attempts} attempts."
+  fi
 
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -356,19 +457,7 @@ EOF
   systemctl enable --now containerd
 
   # Wait for Docker to be ready
-  local max_attempts=30
-  local attempt=0
-  while [[ ${attempt} -lt ${max_attempts} ]]; do
-    if docker info &> /dev/null; then
-      break
-    fi
-    attempt=$((attempt + 1))
-    sleep 2
-  done
-
-  if [[ ${attempt} -eq ${max_attempts} ]]; then
-    fail "Docker daemon failed to start."
-  fi
+  wait_for_docker
 
   info "Docker installed and configured."
 }
@@ -610,22 +699,38 @@ setup_blueprints() {
     local tmp_dir
     tmp_dir="$(mktemp -d)"
 
-    # Download latest release tarball
-    if curl -fsSL "https://github.com/Sami9889/Minirack8/archive/refs/heads/main.tar.gz" -o "${tmp_dir}/minirack8.tar.gz"; then
-      tar -xzf "${tmp_dir}/minirack8.tar.gz" -C "${tmp_dir}"
+    # Download latest release tarball with retries
+    local max_download_attempts=3
+    local download_attempt=0
+    local download_success=false
 
-      # Find the extracted directory
-      local extracted_dir
-      extracted_dir=$(find "${tmp_dir}" -maxdepth 1 -type d -name "Minirack8-*" | head -1)
-
-      if [[ -n "${extracted_dir}" ]]; then
-        repo_dir="${extracted_dir}/minirack8-blueprints"
-        info "Blueprints downloaded to ${repo_dir}"
+    while [[ ${download_attempt} -lt ${max_download_attempts} ]] && [[ "${download_success}" == "false" ]]; do
+      if curl --retry 3 --retry-delay 5 -fsSL "https://github.com/Sami9889/Minirack8/archive/refs/heads/main.tar.gz" -o "${tmp_dir}/minirack8.tar.gz"; then
+        download_success=true
       else
-        fail "Failed to extract MiniRack8 repository."
+        download_attempt=$((download_attempt + 1))
+        warn "Blueprint download failed, retrying (${download_attempt}/${max_download_attempts})..."
+        sleep 5
       fi
+    done
+
+    if [[ "${download_success}" != "true" ]]; then
+      fail "Failed to download MiniRack8 repository after ${max_download_attempts} attempts. Check network connection."
+    fi
+
+    if ! tar -xzf "${tmp_dir}/minirack8.tar.gz" -C "${tmp_dir}"; then
+      fail "Failed to extract MiniRack8 repository tarball."
+    fi
+
+    # Find the extracted directory
+    local extracted_dir
+    extracted_dir=$(find "${tmp_dir}" -maxdepth 1 -type d -name "Minirack8-*" | head -1)
+
+    if [[ -n "${extracted_dir}" && -d "${extracted_dir}/minirack8-blueprints" ]]; then
+      repo_dir="${extracted_dir}/minirack8-blueprints"
+      info "Blueprints downloaded to ${repo_dir}"
     else
-      fail "Failed to download MiniRack8 repository. Check network connection."
+      fail "Failed to locate minirack8-blueprints in extracted repository."
     fi
   fi
 
