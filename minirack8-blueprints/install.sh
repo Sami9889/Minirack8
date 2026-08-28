@@ -30,7 +30,7 @@ NC='\033[0m'
 # =============================================================================
 
 if [[ -z "${BASH_SOURCE[0]:-}" || ! -f "${BASH_SOURCE[0]}" ]]; then
-  tmp_script="$(mktemp /tmp/minirack8-install.XXXXXX.sh)"
+  tmp_script="$(mktemp)" || tmp_script="/tmp/minirack8-install.$$.sh"
   cat > "${tmp_script}"
   chmod +x "${tmp_script}"
   exec bash "${tmp_script}" "$@"
@@ -304,6 +304,32 @@ install_docker() {
   fi
 
   info "Docker not found. Installing Docker..."
+
+  if [[ "${OS}" == "alpine" ]]; then
+    apk update
+    apk add --no-cache docker docker-cli docker-compose
+
+    rc-update add docker default || true
+    service docker start || true
+
+    # Wait for Docker to be ready
+    local max_attempts=30
+    local attempt=0
+    while [[ ${attempt} -lt ${max_attempts} ]]; do
+      if docker info &> /dev/null; then
+        break
+      fi
+      attempt=$((attempt + 1))
+      sleep 2
+    done
+
+    if [[ ${attempt} -eq ${max_attempts} ]]; then
+      fail "Docker daemon failed to start."
+    fi
+
+    info "Docker installed and configured."
+    return 0
+  fi
 
   apt-get update -qq
   apt-get install -y -qq ca-certificates curl gnupg lsb-release
