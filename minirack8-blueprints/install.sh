@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# MiniRack8 Enterprise Provisioner
+# MiniRack8 Provisioner
 # Production-ready deployment for Docker, K3s, and Proxmox
 
 set -euo pipefail
 set -o nounset
 set -o errtrace
 
-MINIRACK_INSTALL_DIR="/opt/minirack8"
+MINIRACK_INSTALL_DIR="${MINIRACK_INSTALL_DIR:-/opt/minirack8}"
 # shellcheck disable=SC2034
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 # shellcheck disable=SC2034
@@ -295,6 +295,37 @@ validate_ip() {
   done
 }
 
+wait_for_docker() {
+  local max_attempts=30
+  local attempt=0
+  local docker_info_timeout=5
+
+  while [[ ${attempt} -lt ${max_attempts} ]]; do
+    if [[ -S /var/run/docker.sock ]] && command -v docker &> /dev/null; then
+      if command -v timeout &> /dev/null; then
+        if timeout "${docker_info_timeout}" docker info &> /dev/null; then
+          return 0
+        fi
+      else
+        if docker info &> /dev/null; then
+          return 0
+        fi
+      fi
+    fi
+
+    if [[ ${attempt} -gt 5 ]]; then
+      if command -v pgrep &> /dev/null && ! pgrep -x dockerd > /dev/null 2>&1; then
+        fail "Docker daemon is not running. Check /var/log/dockerd.log for details."
+      fi
+    fi
+
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  fail "Docker daemon failed to become ready within $((max_attempts * 2)) seconds."
+}
+
 install_docker() {
   step "Checking Docker installation..."
 
@@ -307,25 +338,13 @@ install_docker() {
 
   if [[ "${OS}" == "alpine" ]]; then
     apk update
-    apk add --no-cache docker docker-cli docker-compose
+    apk add --no-cache docker docker-cli docker-compose coreutils
 
     rc-update add docker default || true
     service docker start || true
 
     # Wait for Docker to be ready
-    local max_attempts=30
-    local attempt=0
-    while [[ ${attempt} -lt ${max_attempts} ]]; do
-      if docker info &> /dev/null; then
-        break
-      fi
-      attempt=$((attempt + 1))
-      sleep 2
-    done
-
-    if [[ ${attempt} -eq ${max_attempts} ]]; then
-      fail "Docker daemon failed to start."
-    fi
+    wait_for_docker
 
     info "Docker installed and configured."
     return 0
@@ -382,19 +401,7 @@ EOF
   systemctl enable --now containerd
 
   # Wait for Docker to be ready
-  local max_attempts=30
-  local attempt=0
-  while [[ ${attempt} -lt ${max_attempts} ]]; do
-    if docker info &> /dev/null; then
-      break
-    fi
-    attempt=$((attempt + 1))
-    sleep 2
-  done
-
-  if [[ ${attempt} -eq ${max_attempts} ]]; then
-    fail "Docker daemon failed to start."
-  fi
+  wait_for_docker
 
   info "Docker installed and configured."
 }
