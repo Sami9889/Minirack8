@@ -183,11 +183,6 @@ check_root() {
 check_os() {
   step "Checking operating system..."
 
-  if [[ "${SKIP_OS_CHECK}" == true ]]; then
-    warn "Skipping OS compatibility check per --skip-os-check flag."
-    return 0
-  fi
-
   if [[ -f /etc/os-release ]]; then
     # shellcheck source=/dev/null
     . /etc/os-release
@@ -199,14 +194,18 @@ check_os() {
   fi
 
   case "${OS}" in
-    ubuntu|debian)
+    ubuntu|debian|alpine)
       info "OS supported: ${OS} ${VER}"
       ;;
     *)
-      fail "Unsupported OS: ${OS}. This script supports Ubuntu and Debian only.
+      if [[ "${SKIP_OS_CHECK}" == true ]]; then
+        warn "Skipping OS compatibility check per --skip-os-check flag."
+      else
+        fail "Unsupported OS: ${OS}. This script supports Ubuntu, Debian, and Alpine.
 
 To bypass this check and continue anyway, re-run with:
   sudo bash install.sh --profile ${PROFILE} --skip-os-check"
+      fi
       ;;
   esac
 }
@@ -241,7 +240,7 @@ check_hardware() {
 
   # Storage check
   local storage_gb
-  storage_gb=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+  storage_gb=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/[^0-9]//g')
   info "Storage: ${storage_gb}GB available"
 
   if [[ ${storage_gb} -lt 20 ]]; then
@@ -304,6 +303,32 @@ install_docker() {
   fi
 
   info "Docker not found. Installing Docker..."
+
+  if [[ "${OS}" == "alpine" ]]; then
+    apk update
+    apk add --no-cache docker docker-cli docker-compose
+
+    rc-update add docker default || true
+    service docker start || true
+
+    # Wait for Docker to be ready
+    local max_attempts=30
+    local attempt=0
+    while [[ ${attempt} -lt ${max_attempts} ]]; do
+      if docker info &> /dev/null; then
+        break
+      fi
+      attempt=$((attempt + 1))
+      sleep 2
+    done
+
+    if [[ ${attempt} -eq ${max_attempts} ]]; then
+      fail "Docker daemon failed to start."
+    fi
+
+    info "Docker installed and configured."
+    return 0
+  fi
 
   apt-get update -qq
   apt-get install -y -qq ca-certificates curl gnupg lsb-release
