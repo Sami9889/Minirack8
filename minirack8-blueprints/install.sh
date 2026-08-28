@@ -76,6 +76,18 @@ progress_bar() {
   printf "] ${percentage}%%${NC}"
 }
 
+get_primary_ip() {
+  local ip=""
+  ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+  if [[ -z "${ip}" ]]; then
+    ip=$(ip -4 addr show 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | grep -v '127.0.0.1' | head -1)
+  fi
+  if [[ -z "${ip}" ]]; then
+    ip=$(ifconfig 2>/dev/null | awk '/inet / {print $2}' | grep -v '127.0.0.1' | head -1)
+  fi
+  echo "${ip:-N/A}"
+}
+
 self_update() {
   step "Checking for updates..."
 
@@ -250,7 +262,7 @@ check_hardware() {
 
   # Network check
   local primary_ip
-  primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "N/A")
+  primary_ip=$(get_primary_ip)
   info "Primary IP: ${primary_ip}"
 
   # Summary
@@ -516,6 +528,15 @@ prompt_secure_password() {
   echo "  Press Enter to auto-generate a cryptographically secure password"
   echo ""
 
+  if [[ ! -t 0 ]]; then
+    password=$(generate_password 32)
+    info "Non-interactive mode: auto-generated ${#password}-character password."
+    echo ""
+    validate_password_strength "${password}" 16
+    printf -v "${var_name}" "%s" "${password}"
+    return 0
+  fi
+
   # Use stty to disable echo for password input
   read -rsp "Password [auto-generate]: " password
   echo ""
@@ -581,8 +602,8 @@ setup_secure_passwords() {
 
   # Detect primary IP
   local primary_ip
-  primary_ip=$(hostname -I | awk '{print $1}')
-  if [[ -z "${primary_ip}" ]]; then
+  primary_ip=$(get_primary_ip)
+  if [[ -z "${primary_ip}" || "${primary_ip}" == "N/A" ]]; then
     primary_ip="192.168.1.10"
     warn "Could not detect IP. Using default: ${primary_ip}"
   fi
@@ -769,9 +790,21 @@ deploy_profile() {
       ;;
     *)
       info "Deploying Docker Compose profile: ${profile}"
+
+      if ! docker info &> /dev/null; then
+        fail "Docker is not running. Cannot deploy profile."
+      fi
+
       cd "${MINIRACK_INSTALL_DIR}/docker-compose"
-      docker compose --profile "${profile}" pull
-      docker compose --profile "${profile}" up -d
+
+      local compose_timeout=300
+      if command -v timeout &> /dev/null; then
+        timeout "${compose_timeout}" docker compose --profile "${profile}" pull || fail "docker compose pull failed or timed out after ${compose_timeout}s"
+        timeout "${compose_timeout}" docker compose --profile "${profile}" up -d || fail "docker compose up failed or timed out after ${compose_timeout}s"
+      else
+        docker compose --profile "${profile}" pull || fail "docker compose pull failed"
+        docker compose --profile "${profile}" up -d || fail "docker compose up failed"
+      fi
       ;;
   esac
 
@@ -780,6 +813,8 @@ deploy_profile() {
 
 show_summary() {
   local profile="${1:?profile required}"
+  local primary_ip
+  primary_ip=$(get_primary_ip)
   echo -e "\n${GREEN}═══════════════════════════════════════════════════════════════${NC}"
   info "MiniRack8 installation complete!"
   echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
@@ -795,32 +830,32 @@ show_summary() {
   case "${profile}" in
     homelab)
       echo "2. Access services:"
-      echo "   Plex:        http://$(hostname -I | awk '{print $1}'):32400"
-      echo "   Jellyfin:    http://$(hostname -I | awk '{print $1}'):8096"
-      echo "   Transmission: http://$(hostname -I | awk '{print $1}'):9091"
-      echo "   SABnzbd:     http://$(hostname -I | awk '{print $1}'):8080"
+      echo "   Plex:        http://${primary_ip}:32400"
+      echo "   Jellyfin:    http://${primary_ip}:8096"
+      echo "   Transmission: http://${primary_ip}:9091"
+      echo "   SABnzbd:     http://${primary_ip}:8080"
       ;;
     dev)
       echo "2. Access services:"
-      echo "   Gitea:       http://$(hostname -I | awk '{print $1}'):3000"
-      echo "   Drone:       http://$(hostname -I | awk '{print $1}'):8081"
-      echo "   code-server: https://$(hostname -I | awk '{print $1}'):8443"
+      echo "   Gitea:       http://${primary_ip}:3000"
+      echo "   Drone:       http://${primary_ip}:8081"
+      echo "   code-server: https://${primary_ip}:8443"
       ;;
     networking)
       echo "2. Access services:"
-      echo "   Pi-hole:     http://$(hostname -I | awk '{print $1}'):8082"
-      echo "   WireGuard:   udp://$(hostname -I | awk '{print $1}'):51820"
+      echo "   Pi-hole:     http://${primary_ip}:8082"
+      echo "   WireGuard:   udp://${primary_ip}:51820"
       ;;
     storage)
       echo "2. Access services:"
-      echo "   Nextcloud:   http://$(hostname -I | awk '{print $1}'):8083"
-      echo "   MinIO:       http://$(hostname -I | awk '{print $1}'):9001"
+      echo "   Nextcloud:   http://${primary_ip}:8083"
+      echo "   MinIO:       http://${primary_ip}:9001"
       ;;
     monitoring)
       echo "2. Access services:"
-      echo "   Grafana:     http://$(hostname -I | awk '{print $1}'):3002"
-      echo "   Prometheus:  http://$(hostname -I | awk '{print $1}'):9090"
-      echo "   InfluxDB:    http://$(hostname -I | awk '{print $1}'):8086"
+      echo "   Grafana:     http://${primary_ip}:3002"
+      echo "   Prometheus:  http://${primary_ip}:9090"
+      echo "   InfluxDB:    http://${primary_ip}:8086"
       ;;
     full)
       echo "2. All services deployed. Check docker-compose.yml for port mappings."
@@ -880,7 +915,7 @@ EOF
   echo -e "${DIM}$(printf '%.0s─' {1..90})${NC}"
 
   local primary_ip
-  primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+  primary_ip=$(get_primary_ip)
 
   while IFS=$'\t' read -r name status ports; do
     local status_color="${GREEN}"
