@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# MiniRack8 Enterprise Provisioner
+# MiniRack8 Provisioner
 # Production-ready deployment for Docker, K3s, and Proxmox
 
 set -euo pipefail
 set -o nounset
 set -o errtrace
 
-MINIRACK_INSTALL_DIR="/opt/minirack8"
+MINIRACK_INSTALL_DIR="${MINIRACK_INSTALL_DIR:-/opt/minirack8}"
 # shellcheck disable=SC2034
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 # shellcheck disable=SC2034
@@ -76,6 +76,18 @@ progress_bar() {
   printf "] ${percentage}%%${NC}"
 }
 
+get_primary_ip() {
+  local ip=""
+  ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+  if [[ -z "${ip}" ]]; then
+    ip=$(ip -4 addr show 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | grep -v '127.0.0.1' | head -1)
+  fi
+  if [[ -z "${ip}" ]]; then
+    ip=$(ifconfig 2>/dev/null | awk '/inet / {print $2}' | grep -v '127.0.0.1' | head -1)
+  fi
+  echo "${ip:-N/A}"
+}
+
 self_update() {
   step "Checking for updates..."
 
@@ -85,7 +97,7 @@ self_update() {
   if [[ ! -d "${script_path}/.git" ]]; then
     info "Not a git clone. Skipping self-update."
     info "To get the latest version, re-run the install command:"
-    info "  curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile ${PROFILE}"
+    info "  curl --retry 3 --retry-delay 5 -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile ${PROFILE}"
     return 0
   fi
 
@@ -162,8 +174,7 @@ show_banner() {
   cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║   MiniRack8 Enterprise Provisioner                          ║
-║   Production-Ready Deployment Automation                    ║
+║   MiniRack8 Provisioner                                      ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
@@ -183,11 +194,6 @@ check_root() {
 check_os() {
   step "Checking operating system..."
 
-  if [[ "${SKIP_OS_CHECK}" == true ]]; then
-    warn "Skipping OS compatibility check per --skip-os-check flag."
-    return 0
-  fi
-
   if [[ -f /etc/os-release ]]; then
     # shellcheck source=/dev/null
     . /etc/os-release
@@ -199,14 +205,18 @@ check_os() {
   fi
 
   case "${OS}" in
-    ubuntu|debian)
+    ubuntu|debian|alpine)
       info "OS supported: ${OS} ${VER}"
       ;;
     *)
-      fail "Unsupported OS: ${OS}. This script supports Ubuntu and Debian only.
+      if [[ "${SKIP_OS_CHECK}" == true ]]; then
+        warn "Skipping OS compatibility check per --skip-os-check flag."
+      else
+        fail "Unsupported OS: ${OS}. This script supports Ubuntu, Debian, and Alpine.
 
 To bypass this check and continue anyway, re-run with:
   sudo bash install.sh --profile ${PROFILE} --skip-os-check"
+      fi
       ;;
   esac
 }
@@ -241,7 +251,7 @@ check_hardware() {
 
   # Storage check
   local storage_gb
-  storage_gb=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+  storage_gb=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/[^0-9]//g')
   info "Storage: ${storage_gb}GB available"
 
   if [[ ${storage_gb} -lt 20 ]]; then
@@ -252,7 +262,7 @@ check_hardware() {
 
   # Network check
   local primary_ip
-  primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "N/A")
+  primary_ip=$(get_primary_ip)
   info "Primary IP: ${primary_ip}"
 
   # Summary
@@ -396,6 +406,52 @@ install_docker() {
   local max_apt_attempts=3
   local apt_attempt=0
 
+  if [[ "${OS}" == "alpine" ]]; then
+    apk update
+
+    # Retry apk add on transient network errors
+    local max_apk_attempts=3
+    local apk_attempt=0
+    while [[ ${apk_attempt} -lt ${max_apk_attempts} ]]; do
+      if apk add --no-cache docker docker-cli docker-compose coreutils procps; then
+        break
+      fi
+      apk_attempt=$((apk_attempt + 1))
+      warn "apk add failed, retrying (${apk_attempt}/${max_apk_attempts})..."
+      sleep 5
+    done
+
+    if [[ ${apk_attempt} -eq ${max_apk_attempts} ]]; then
+      fail "Failed to install Docker on Alpine after ${max_apk_attempts} attempts."
+    fi
+
+    # Enable and start Docker if init tools are available
+    if command -v rc-update &> /dev/null; then
+      rc-update add docker default || true
+    fi
+
+    if command -v service &> /dev/null; then
+      service docker start || true
+    elif command -v rc-service &> /dev/null; then
+      rc-service docker start || true
+    else
+      warn "OpenRC/service not found. Starting dockerd directly."
+      nohup dockerd > /var/log/dockerd.log 2>&1 &
+      local dockerd_pid=$!
+      info "Started dockerd with PID ${dockerd_pid}"
+    fi
+
+    # Wait for Docker to be ready
+    wait_for_docker "${dockerd_pid:-}"
+
+    info "Docker installed and configured."
+    return 0
+  fi
+
+  # Retry apt operations on transient network errors
+  local max_apt_attempts=3
+  local apt_attempt=0
+
   while [[ ${apt_attempt} -lt ${max_apt_attempts} ]]; do
     if apt-get update -qq && apt-get install -y -qq ca-certificates curl gnupg lsb-release; then
       break
@@ -410,13 +466,41 @@ install_docker() {
   fi
 
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+  # Retry GPG key download on transient network errors
+  local max_curl_attempts=3
+  local curl_attempt=0
+  while [[ ${curl_attempt} -lt ${max_curl_attempts} ]]; do
+    if curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; then
+      break
+    fi
+    curl_attempt=$((curl_attempt + 1))
+    warn "GPG key download failed, retrying (${curl_attempt}/${max_curl_attempts})..."
+    sleep 5
+  done
+
+  if [[ ${curl_attempt} -eq ${max_curl_attempts} ]]; then
+    fail "Failed to download Docker GPG key after ${max_curl_attempts} attempts."
+  fi
+
   chmod a+r /etc/apt/keyrings/docker.gpg
 
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${OS} $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-  apt-get update -qq
-  apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  # Retry Docker package installation
+  apt_attempt=0
+  while [[ ${apt_attempt} -lt ${max_apt_attempts} ]]; do
+    if apt-get update -qq && apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+      break
+    fi
+    apt_attempt=$((apt_attempt + 1))
+    warn "Docker package install failed, retrying (${apt_attempt}/${max_apt_attempts})..."
+    sleep 5
+  done
+
+  if [[ ${apt_attempt} -eq ${max_apt_attempts} ]]; then
+    fail "Failed to install Docker packages after ${max_apt_attempts} attempts."
+  fi
 
   # Configure Docker daemon
   cat > /etc/docker/daemon.json << 'EOF'
@@ -452,9 +536,15 @@ RestartSec=10
 LimitNOFILE=65536
 EOF
 
-  systemctl daemon-reload
-  systemctl enable --now docker
-  systemctl enable --now containerd
+  # Enable and start Docker if systemd is available
+  if command -v systemctl &> /dev/null; then
+    systemctl daemon-reload
+    systemctl enable --now docker
+    systemctl enable --now containerd
+  else
+    warn "systemctl not found. Starting dockerd directly."
+    nohup dockerd > /var/log/dockerd.log 2>&1 &
+  fi
 
   # Wait for Docker to be ready
   wait_for_docker
@@ -507,6 +597,15 @@ prompt_secure_password() {
   echo "  Requirements: minimum 16 characters, mixed case, numbers, symbols"
   echo "  Press Enter to auto-generate a cryptographically secure password"
   echo ""
+
+  if [[ ! -t 0 ]]; then
+    password=$(generate_password 32)
+    info "Non-interactive mode: auto-generated ${#password}-character password."
+    echo ""
+    validate_password_strength "${password}" 16
+    printf -v "${var_name}" "%s" "${password}"
+    return 0
+  fi
 
   # Use stty to disable echo for password input
   read -rsp "Password [auto-generate]: " password
@@ -573,8 +672,8 @@ setup_secure_passwords() {
 
   # Detect primary IP
   local primary_ip
-  primary_ip=$(hostname -I | awk '{print $1}')
-  if [[ -z "${primary_ip}" ]]; then
+  primary_ip=$(get_primary_ip)
+  if [[ -z "${primary_ip}" || "${primary_ip}" == "N/A" ]]; then
     primary_ip="192.168.1.10"
     warn "Could not detect IP. Using default: ${primary_ip}"
   fi
@@ -777,9 +876,21 @@ deploy_profile() {
       ;;
     *)
       info "Deploying Docker Compose profile: ${profile}"
+
+      if ! docker info &> /dev/null; then
+        fail "Docker is not running. Cannot deploy profile."
+      fi
+
       cd "${MINIRACK_INSTALL_DIR}/docker-compose"
-      docker compose --profile "${profile}" pull
-      docker compose --profile "${profile}" up -d
+
+      local compose_timeout=300
+      if command -v timeout &> /dev/null; then
+        timeout "${compose_timeout}" docker compose --profile "${profile}" pull || fail "docker compose pull failed or timed out after ${compose_timeout}s"
+        timeout "${compose_timeout}" docker compose --profile "${profile}" up -d || fail "docker compose up failed or timed out after ${compose_timeout}s"
+      else
+        docker compose --profile "${profile}" pull || fail "docker compose pull failed"
+        docker compose --profile "${profile}" up -d || fail "docker compose up failed"
+      fi
       ;;
   esac
 
@@ -788,6 +899,8 @@ deploy_profile() {
 
 show_summary() {
   local profile="${1:?profile required}"
+  local primary_ip
+  primary_ip=$(get_primary_ip)
   echo -e "\n${GREEN}═══════════════════════════════════════════════════════════════${NC}"
   info "MiniRack8 installation complete!"
   echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
@@ -803,32 +916,32 @@ show_summary() {
   case "${profile}" in
     homelab)
       echo "2. Access services:"
-      echo "   Plex:        http://$(hostname -I | awk '{print $1}'):32400"
-      echo "   Jellyfin:    http://$(hostname -I | awk '{print $1}'):8096"
-      echo "   Transmission: http://$(hostname -I | awk '{print $1}'):9091"
-      echo "   SABnzbd:     http://$(hostname -I | awk '{print $1}'):8080"
+      echo "   Plex:        http://${primary_ip}:32400"
+      echo "   Jellyfin:    http://${primary_ip}:8096"
+      echo "   Transmission: http://${primary_ip}:9091"
+      echo "   SABnzbd:     http://${primary_ip}:8080"
       ;;
     dev)
       echo "2. Access services:"
-      echo "   Gitea:       http://$(hostname -I | awk '{print $1}'):3000"
-      echo "   Drone:       http://$(hostname -I | awk '{print $1}'):8081"
-      echo "   code-server: https://$(hostname -I | awk '{print $1}'):8443"
+      echo "   Gitea:       http://${primary_ip}:3000"
+      echo "   Drone:       http://${primary_ip}:8081"
+      echo "   code-server: https://${primary_ip}:8443"
       ;;
     networking)
       echo "2. Access services:"
-      echo "   Pi-hole:     http://$(hostname -I | awk '{print $1}'):8082"
-      echo "   WireGuard:   udp://$(hostname -I | awk '{print $1}'):51820"
+      echo "   Pi-hole:     http://${primary_ip}:8082"
+      echo "   WireGuard:   udp://${primary_ip}:51820"
       ;;
     storage)
       echo "2. Access services:"
-      echo "   Nextcloud:   http://$(hostname -I | awk '{print $1}'):8083"
-      echo "   MinIO:       http://$(hostname -I | awk '{print $1}'):9001"
+      echo "   Nextcloud:   http://${primary_ip}:8083"
+      echo "   MinIO:       http://${primary_ip}:9001"
       ;;
     monitoring)
       echo "2. Access services:"
-      echo "   Grafana:     http://$(hostname -I | awk '{print $1}'):3002"
-      echo "   Prometheus:  http://$(hostname -I | awk '{print $1}'):9090"
-      echo "   InfluxDB:    http://$(hostname -I | awk '{print $1}'):8086"
+      echo "   Grafana:     http://${primary_ip}:3002"
+      echo "   Prometheus:  http://${primary_ip}:9090"
+      echo "   InfluxDB:    http://${primary_ip}:8086"
       ;;
     full)
       echo "2. All services deployed. Check docker-compose.yml for port mappings."
@@ -888,7 +1001,7 @@ EOF
   echo -e "${DIM}$(printf '%.0s─' {1..90})${NC}"
 
   local primary_ip
-  primary_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+  primary_ip=$(get_primary_ip)
 
   while IFS=$'\t' read -r name status ports; do
     local status_color="${GREEN}"
@@ -964,7 +1077,7 @@ EOF
 
 show_usage() {
   cat << EOF
-${GREEN}MiniRack8 Enterprise Provisioner${NC}
+${GREEN}MiniRack8 Provisioner${NC}
 
 ${YELLOW}Usage:${NC} $0 --profile <profile> [options]
 
