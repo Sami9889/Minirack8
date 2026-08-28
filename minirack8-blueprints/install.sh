@@ -311,13 +311,21 @@ wait_for_docker() {
   local docker_info_timeout=5
 
   while [[ ${attempt} -lt ${max_attempts} ]]; do
-    if command -v timeout &> /dev/null; then
-      if timeout "${docker_info_timeout}" docker info &> /dev/null; then
-        return 0
+    if [[ -S /var/run/docker.sock ]] && command -v docker &> /dev/null; then
+      if command -v timeout &> /dev/null; then
+        if timeout "${docker_info_timeout}" docker info &> /dev/null; then
+          return 0
+        fi
+      else
+        if docker info &> /dev/null; then
+          return 0
+        fi
       fi
-    else
-      if docker info &> /dev/null; then
-        return 0
+    fi
+
+    if [[ ${attempt} -gt 5 ]]; then
+      if command -v pgrep &> /dev/null && ! pgrep -x dockerd > /dev/null 2>&1; then
+        fail "Docker daemon is not running. Check /var/log/dockerd.log for details."
       fi
     fi
 
