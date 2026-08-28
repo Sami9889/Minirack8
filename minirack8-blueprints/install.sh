@@ -30,7 +30,7 @@ NC='\033[0m'
 # =============================================================================
 
 if [[ -z "${BASH_SOURCE[0]:-}" || ! -f "${BASH_SOURCE[0]}" ]]; then
-  tmp_script="$(mktemp /tmp/minirack8-install.XXXXXX.sh)"
+  tmp_script="$(mktemp)" || tmp_script="/tmp/minirack8-install.$$.sh"
   cat > "${tmp_script}"
   chmod +x "${tmp_script}"
   exec bash "${tmp_script}" "$@"
