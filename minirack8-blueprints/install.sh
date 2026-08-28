@@ -309,15 +309,32 @@ wait_for_docker() {
   local max_attempts=30
   local attempt=0
   local docker_info_timeout=5
+  local dockerd_pid="${1:-}"
 
   while [[ ${attempt} -lt ${max_attempts} ]]; do
-    if command -v timeout &> /dev/null; then
-      if timeout "${docker_info_timeout}" docker info &> /dev/null; then
-        return 0
+    if [[ -S /var/run/docker.sock ]] && command -v docker &> /dev/null; then
+      if command -v timeout &> /dev/null; then
+        if timeout "${docker_info_timeout}" docker info &> /dev/null; then
+          return 0
+        fi
+      else
+        if docker info &> /dev/null; then
+          return 0
+        fi
       fi
-    else
-      if docker info &> /dev/null; then
-        return 0
+    fi
+
+    # If a specific dockerd PID was provided, check if it is still alive
+    if [[ -n "${dockerd_pid}" ]]; then
+      if ! kill -0 "${dockerd_pid}" 2>/dev/null; then
+        fail "Docker daemon process ${dockerd_pid} exited. Check /var/log/dockerd.log for details."
+      fi
+    fi
+
+    # If no PID was provided, fall back to checking for any dockerd process
+    if [[ -z "${dockerd_pid}" ]] && [[ ${attempt} -gt 5 ]]; then
+      if command -v pgrep &> /dev/null && ! pgrep -x dockerd > /dev/null 2>&1; then
+        fail "Docker daemon is not running. Check /var/log/dockerd.log for details."
       fi
     fi
 
@@ -345,7 +362,7 @@ install_docker() {
     local max_apk_attempts=3
     local apk_attempt=0
     while [[ ${apk_attempt} -lt ${max_apk_attempts} ]]; do
-      if apk add --no-cache docker docker-cli docker-compose; then
+      if apk add --no-cache docker docker-cli docker-compose coreutils procps; then
         break
       fi
       apk_attempt=$((apk_attempt + 1))
@@ -369,10 +386,12 @@ install_docker() {
     else
       warn "OpenRC/service not found. Starting dockerd directly."
       nohup dockerd > /var/log/dockerd.log 2>&1 &
+      local dockerd_pid=$!
+      info "Started dockerd with PID ${dockerd_pid}"
     fi
 
     # Wait for Docker to be ready
-    wait_for_docker
+    wait_for_docker "${dockerd_pid:-}"
 
     info "Docker installed and configured."
     return 0
