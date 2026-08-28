@@ -6,15 +6,16 @@
 Run this entire command as a single line. It downloads `install.sh` and pipes it directly to `bash` for execution:
 
 \`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
+curl --retry 3 --retry-delay 5 -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
 \`\`\`
 
 > **Note:** Do not run `curl` by itself. The `| sudo bash -s --` part is required to execute the script.
+> If you see SSL errors such as `decryption failed` or `bad record mac`, re-run the command. The `--retry` flags above help tolerate transient network issues.
 ```bash
 # Install Docker and deploy a profile in one step
 # PCI-DSS inspired security: cryptographically secure passwords generated automatically
 # Use --skip-os-check to bypass OS validation on non-standard Linux distributions
-curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
+curl --retry 3 --retry-delay 5 -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile homelab
 ```
 
 ### Manual Installation

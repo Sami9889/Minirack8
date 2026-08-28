@@ -6,7 +6,7 @@ set -euo pipefail
 set -o nounset
 set -o errtrace
 
-MINIRACK_INSTALL_DIR="/opt/minirack8"
+MINIRACK_INSTALL_DIR="${MINIRACK_INSTALL_DIR:-/opt/minirack8}"
 # shellcheck disable=SC2034
 MINIRACK_DOCKER_VERSION="5:24.0.0-1~ubuntu.22.04~jammy"
 # shellcheck disable=SC2034
@@ -97,7 +97,7 @@ self_update() {
   if [[ ! -d "${script_path}/.git" ]]; then
     info "Not a git clone. Skipping self-update."
     info "To get the latest version, re-run the install command:"
-    info "  curl -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile ${PROFILE}"
+    info "  curl --retry 3 --retry-delay 5 -fsSL https://raw.githubusercontent.com/Sami9889/Minirack8/main/minirack8-blueprints/install.sh | sudo bash -s -- --profile ${PROFILE}"
     return 0
   fi
 
