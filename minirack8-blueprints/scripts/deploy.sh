@@ -167,7 +167,7 @@ show_banner() {
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
 ║   MiniRack8 Blueprint Deploy Script                        ║
-║   Production-Ready Deployment Automation                    ║
+║                                                              ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
