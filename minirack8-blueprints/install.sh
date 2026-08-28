@@ -183,11 +183,6 @@ check_root() {
 check_os() {
   step "Checking operating system..."
 
-  if [[ "${SKIP_OS_CHECK}" == true ]]; then
-    warn "Skipping OS compatibility check per --skip-os-check flag."
-    return 0
-  fi
-
   if [[ -f /etc/os-release ]]; then
     # shellcheck source=/dev/null
     . /etc/os-release
@@ -199,14 +194,18 @@ check_os() {
   fi
 
   case "${OS}" in
-    ubuntu|debian)
+    ubuntu|debian|alpine)
       info "OS supported: ${OS} ${VER}"
       ;;
     *)
-      fail "Unsupported OS: ${OS}. This script supports Ubuntu and Debian only.
+      if [[ "${SKIP_OS_CHECK}" == true ]]; then
+        warn "Skipping OS compatibility check per --skip-os-check flag."
+      else
+        fail "Unsupported OS: ${OS}. This script supports Ubuntu, Debian, and Alpine.
 
 To bypass this check and continue anyway, re-run with:
   sudo bash install.sh --profile ${PROFILE} --skip-os-check"
+      fi
       ;;
   esac
 }
@@ -241,7 +240,7 @@ check_hardware() {
 
   # Storage check
   local storage_gb
-  storage_gb=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+  storage_gb=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/[^0-9]//g')
   info "Storage: ${storage_gb}GB available"
 
   if [[ ${storage_gb} -lt 20 ]]; then
@@ -307,10 +306,36 @@ install_docker() {
 
   if [[ "${OS}" == "alpine" ]]; then
     apk update
-    apk add --no-cache docker docker-cli docker-compose
 
-    rc-update add docker default || true
-    service docker start || true
+    # Retry apk add on transient network errors
+    local max_apk_attempts=3
+    local apk_attempt=0
+    while [[ ${apk_attempt} -lt ${max_apk_attempts} ]]; do
+      if apk add --no-cache docker docker-cli docker-compose; then
+        break
+      fi
+      apk_attempt=$((apk_attempt + 1))
+      warn "apk add failed, retrying (${apk_attempt}/${max_apk_attempts})..."
+      sleep 5
+    done
+
+    if [[ ${apk_attempt} -eq ${max_apk_attempts} ]]; then
+      fail "Failed to install Docker on Alpine after ${max_apk_attempts} attempts."
+    fi
+
+    # Enable and start Docker if init tools are available
+    if command -v rc-update &> /dev/null; then
+      rc-update add docker default || true
+    fi
+
+    if command -v service &> /dev/null; then
+      service docker start || true
+    elif command -v rc-service &> /dev/null; then
+      rc-service docker start || true
+    else
+      warn "OpenRC/service not found. Starting dockerd directly."
+      nohup dockerd > /var/log/dockerd.log 2>&1 &
+    fi
 
     # Wait for Docker to be ready
     local max_attempts=30
